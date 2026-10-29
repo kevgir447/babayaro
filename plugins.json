@@ -3,7 +3,7 @@
     "iconUrl": "https://www.dizibox.live/wp-content/themes/dizibox/images/logo.png",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/kevgir447/babayaro",
-    "fileSize": 18666,
+    "fileSize": 20205,
     "status": 1,
     "language": "tr",
     "authors": [
@@ -12,7 +12,7 @@
     "tvTypes": [
       "TvSeries"
     ],
-    "version": 2,
+    "version": 3,
     "internalName": "Dizibox",
     "description": "Dizibox - Yabancı Dizi izleme eklentisi",
     "url": "https://cdn.jsdelivr.net/gh/kevgir447/babayaro@builds/Dizibox.cs3",
@@ -22,7 +22,7 @@
     "iconUrl": "https://dizikorea3.com/assets/uploads/site/35ddaa204a2595a43356bf382da10d03.svg",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/kevgir447/babayaro",
-    "fileSize": 18558,
+    "fileSize": 19019,
     "status": 1,
     "language": "tr",
     "authors": [
@@ -32,7 +32,7 @@
       "TvSeries",
       "AsianDrama"
     ],
-    "version": 2,
+    "version": 3,
     "internalName": "Dizikorea",
     "description": "Dizikorea - Asya ve Kore Dizileri izleme eklentisi",
     "url": "https://cdn.jsdelivr.net/gh/kevgir447/babayaro@builds/Dizikorea.cs3",
@@ -42,7 +42,7 @@
     "iconUrl": "https://dizipal1592.com/assets/images/logo-dpal.svg",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/kevgir447/babayaro",
-    "fileSize": 22738,
+    "fileSize": 24780,
     "status": 1,
     "language": "tr",
     "authors": [
@@ -52,7 +52,7 @@
       "Movie",
       "TvSeries"
     ],
-    "version": 2,
+    "version": 3,
     "internalName": "Dizipal",
     "description": "Dizipal - Film ve Yabancı Dizi izleme eklentisi",
     "url": "https://cdn.jsdelivr.net/gh/kevgir447/babayaro@builds/Dizipal.cs3",
@@ -62,7 +62,7 @@
     "iconUrl": "https://www.hdfilmcehennemi.nl/dist/images/logo.svg",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/kevgir447/babayaro",
-    "fileSize": 19129,
+    "fileSize": 19392,
     "status": 1,
     "language": "tr",
     "authors": [
@@ -72,7 +72,7 @@
       "Movie",
       "TvSeries"
     ],
-    "version": 2,
+    "version": 3,
     "internalName": "Hdfilmcehennemi",
     "description": "HDFilmCehennemi - Film ve Dizi izleme eklentisi",
     "url": "https://cdn.jsdelivr.net/gh/kevgir447/babayaro@builds/Hdfilmcehennemi.cs3",
