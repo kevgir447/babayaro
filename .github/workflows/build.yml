@@ -55,7 +55,9 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
-          ./gradlew make makePluginsJson
+          # Warm up Jitpack caches
+          curl -s -f -L https://jitpack.io/com/github/recloudstream/gradle/-SNAPSHOT/gradle--32895aedb6-1.pom > /dev/null || true
+          ./gradlew make makePluginsJson --stacktrace || ./gradlew make makePluginsJson --stacktrace
           cp **/build/*.cs3 $GITHUB_WORKSPACE/builds/ || true
           cp build/plugins.json $GITHUB_WORKSPACE/builds/
           
