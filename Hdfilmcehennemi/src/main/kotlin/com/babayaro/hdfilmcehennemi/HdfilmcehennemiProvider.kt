@@ -30,16 +30,20 @@ class HdfilmcehennemiProvider : MainAPI() {
         val slug = pathSegments.firstOrNull() ?: return null
 
         // Kategori, tür, yıl, sayfa ve liste linklerini kesinlikle atla
-        if (slug.contains("filmleri", ignoreCase = true) ||
-            slug.contains("dizileri", ignoreCase = true) ||
+        if (slug.contains("filmler", ignoreCase = true) ||
+            slug.contains("diziler", ignoreCase = true) ||
             slug.contains("kategori", ignoreCase = true) ||
             slug.contains("tur-", ignoreCase = true) ||
+            slug.contains("yorumlananlar", ignoreCase = true) ||
+            slug.contains("begenilen", ignoreCase = true) ||
+            slug.contains("robotu", ignoreCase = true) ||
+            slug.contains("istek", ignoreCase = true) ||
+            slug == "apk" || slug.startsWith("iletisim") || slug.startsWith("serifilmlerim") ||
             href.contains("/tur/") || href.contains("/kategori/") || href.contains("/yil/") || href.contains("/page/")) {
             return null
         }
 
-        val isValidMovie = (pathSegments.size == 1 && (slug.contains("-izle") || slug.contains("-izleyin"))) ||
-                           (pathSegments.size == 2 && pathSegments[0] == "dizi")
+        val isValidMovie = (pathSegments.size == 1) || (pathSegments.size == 2 && pathSegments[0] == "dizi")
         if (!isValidMovie) return null
 
         val title = this.selectFirst("h2, h3, h4, .poster-info h2, .poster-title, .title")?.text()
@@ -118,7 +122,7 @@ class HdfilmcehennemiProvider : MainAPI() {
             val res = app.get(
                 searchUrl,
                 headers = mapOf(
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                    "User-Agent" to defaultHeaders["User-Agent"]!!,
                     "X-Requested-With" to "fetch",
                     "Content-Type" to "application/json",
                     "Referer" to "$mainUrl/"
@@ -163,7 +167,7 @@ class HdfilmcehennemiProvider : MainAPI() {
             ?: ""
 
         val posterUrl = document.selectFirst("meta[property=og:image]")?.attr("content")
-            ?: document.selectFirst(".poster-wrapper img, .poster img, img[itemprop=image]")?.let { img ->
+            ?: document.selectFirst(".poster-wrapper img, .poster img, img[itemprop=image], .post-info-poster img")?.let { img ->
                 val src = img.attr("data-cfsrc").ifEmpty {
                     img.attr("data-src").ifEmpty {
                         img.attr("data-original").ifEmpty {
@@ -174,22 +178,24 @@ class HdfilmcehennemiProvider : MainAPI() {
                 if (src.startsWith("data:")) null else fixUrlNull(src)
             }
 
-        val plot = document.selectFirst(".film-content, .overview, .film-synopsis, p.text-muted, meta[property=og:description], .story, #film-content")?.let {
+        val plot = document.selectFirst("article p, article, .film-content, .overview, .film-synopsis, p.text-muted, meta[property=og:description], .story, #film-content")?.let {
             if (it.tagName() == "meta") it.attr("content") else it.text()
         }
 
-        val year = document.selectFirst(".meta .year, .year, a[href*=-filmleri-izle]")?.text()?.filter { it.isDigit() }?.toIntOrNull()
-        val tags = document.select(".tags a, .genres a, a[href*=/tur/]").map { it.text() }
+        val year = document.selectFirst(".meta .year, .year, a[href*=-filmleri-izle], .post-info-year-country a")?.text()?.filter { it.isDigit() }?.toIntOrNull()
+        val tags = document.select(".tags a, .genres a, a[href*=/tur/], .post-info-genres a").map { it.text() }
 
-        val isTv = url.contains("/dizi/") || document.select(".season-tab, .episode-item").isNotEmpty()
+        val isTv = url.contains("/dizi/") || document.select(".season-tab, .episode-item, .seasons, a[href*=/bolum-]").isNotEmpty()
 
         return if (isTv) {
             val episodes = mutableListOf<Episode>()
-            document.select(".episode-item, .bolum-item, a[href*=-bolum]").forEach { epElem ->
-                val epHref = fixUrl(epElem.attr("href"))
-                val epName = epElem.text()
-                val seasonNum = Regex("""(\d+)\.\s*sezon""", RegexOption.IGNORE_CASE).find(epName)?.groupValues?.get(1)?.toIntOrNull() ?: 1
-                val epNum = Regex("""(\d+)\.\s*b[oö]l[uü]m""", RegexOption.IGNORE_CASE).find(epName)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+            document.select(".seasons a, .episode-item, .bolum-item, a[href*=/bolum-], a[href*=-bolum]").forEach { epElem ->
+                val epHref = fixUrlNull(epElem.attr("href")) ?: return@forEach
+                val epName = epElem.selectFirst(".mini-poster-title, h4")?.text() ?: epElem.text()
+                val seasonNum = Regex("""(\d+)\.\s*sezon""", RegexOption.IGNORE_CASE).find(epName)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: Regex("""sezon-(\d+)""").find(epHref)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+                val epNum = Regex("""(\d+)\.\s*b[oö]l[uü]m""", RegexOption.IGNORE_CASE).find(epName)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: Regex("""bolum-(\d+)""").find(epHref)?.groupValues?.get(1)?.toIntOrNull() ?: 1
 
                 episodes.add(
                     newEpisode(epHref) {
@@ -200,7 +206,7 @@ class HdfilmcehennemiProvider : MainAPI() {
                 )
             }
 
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes.distinctBy { it.data }) {
                 this.posterUrl = posterUrl
                 this.plot = plot
                 this.year = year
@@ -216,6 +222,84 @@ class HdfilmcehennemiProvider : MainAPI() {
         }
     }
 
+    private data class VideoResponse(
+        @JsonProperty("success") val success: Boolean? = null,
+        @JsonProperty("data") val data: VideoData? = null
+    )
+    private data class VideoData(
+        @JsonProperty("html") val html: String? = null
+    )
+
+    private fun extractStreamsFromJs(jsCode: String, domain: String, referer: String): List<String> {
+        return try {
+            val polyfill = """
+                var b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+                function atob(input) {
+                  var str = String(input).replace(/=+$/, "");
+                  var output = "";
+                  for (var bc = 0, bs, buffer, idx = 0; buffer = str.charAt(idx++); ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
+                    buffer = b64chars.indexOf(buffer);
+                  }
+                  return output;
+                }
+                function btoa(input) {
+                  var str = String(input);
+                  var output = "";
+                  for (var block, charCode, idx = 0, map = b64chars;
+                       str.charAt(idx | 0) || (map = "=", idx % 1);
+                       output += map.charAt(63 & block >> 8 - idx % 1 * 8)) {
+                    charCode = str.charCodeAt(idx += 3/4);
+                    block = block << 8 | charCode;
+                  }
+                  return output;
+                }
+                var location = { hostname: "$domain", href: "https://$domain/" };
+                var window = { location: location };
+                var document = { location: location, referrer: "$referer" };
+            """.trimIndent()
+
+            val fullCode = """
+                $polyfill
+                $jsCode
+                var __found_streams = [];
+                for (var __k in this) {
+                    try {
+                        var __val = this[__k];
+                        if (typeof __val === "string" && (__val.indexOf(".m3u8") !== -1 || __val.indexOf(".txt") !== -1 || __val.indexOf("master") !== -1)) {
+                            __found_streams.push(__val);
+                        }
+                    } catch(e) {}
+                }
+                __found_streams.join("###");
+            """.trimIndent()
+
+            val contextClass = Class.forName("org.mozilla.javascript.Context")
+            val enterMethod = contextClass.getMethod("enter")
+            val exitMethod = contextClass.getMethod("exit")
+            val ctx = enterMethod.invoke(null)
+            try {
+                val setOptMethod = contextClass.getMethod("setOptimizationLevel", Int::class.javaPrimitiveType)
+                setOptMethod.invoke(ctx, -1)
+                val initStdMethod = contextClass.getMethod("initStandardObjects")
+                val scope = initStdMethod.invoke(ctx)
+                val evalMethod = contextClass.getMethod(
+                    "evaluateString",
+                    Class.forName("org.mozilla.javascript.Scriptable"),
+                    String::class.java,
+                    String::class.java,
+                    Int::class.javaPrimitiveType,
+                    Any::class.java
+                )
+                val res = evalMethod.invoke(ctx, scope, fullCode, "script", 1, null)?.toString() ?: ""
+                res.split("###").filter { it.startsWith("http") }
+            } finally {
+                exitMethod.invoke(null)
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -223,37 +307,102 @@ class HdfilmcehennemiProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(data, headers = defaultHeaders).document
-        val iframes = document.select("iframe, a[data-src], nav.nav-tabs a, .card-video a, button[data-src], div[data-src]").mapNotNull {
-            val src = it.attr("data-src").ifEmpty { it.attr("src") }
-            if (src.isNotEmpty()) fixUrl(src) else null
-        }.distinct().toMutableList()
+        val iframes = mutableListOf<String>()
 
-        // Sayfa içindeki tüm iframe ve player kaynaklarını tara
+        document.select("iframe, a[data-src], nav.nav-tabs a, .card-video a, button[data-src], div[data-src]").forEach {
+            val src = it.attr("data-src").ifEmpty { it.attr("src") }
+            if (src.isNotEmpty()) {
+                val fixed = fixUrl(src)
+                if (!iframes.contains(fixed)) iframes.add(fixed)
+            }
+        }
+
+        // Alternative video butonlarını sorgula (fetch("/video/{id}/"))
+        document.select("button[data-video], .alternative-link[data-video]").forEach { btn ->
+            val videoId = btn.attr("data-video").trim()
+            if (videoId.isNotEmpty()) {
+                try {
+                    val res = app.get(
+                        "$mainUrl/video/$videoId/",
+                        headers = mapOf(
+                            "Referer" to data,
+                            "User-Agent" to defaultHeaders["User-Agent"]!!,
+                            "X-Requested-With" to "fetch"
+                        )
+                    ).parsedSafe<VideoResponse>()
+                    res?.data?.html?.let { htmlChunk ->
+                        Jsoup.parse(htmlChunk).select("iframe").forEach { iframe ->
+                            val s = iframe.attr("data-src").ifEmpty { iframe.attr("src") }
+                            if (s.isNotEmpty()) {
+                                val fixed = fixUrl(s)
+                                if (!iframes.contains(fixed)) iframes.add(fixed)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+        }
+
+        // rapidrame_id parametresi varsa doğrudan rplayer linkini de ekle
+        val rapidrameIds = mutableListOf<String>()
+        iframes.forEach { u ->
+            Regex("""rapidrame_id=([a-zA-Z0-9]+)""").find(u)?.groupValues?.get(1)?.let {
+                rapidrameIds.add(it)
+            }
+        }
+        rapidrameIds.distinct().forEach { id ->
+            val rplayerUrl = "$mainUrl/rplayer/$id/"
+            if (!iframes.contains(rplayerUrl)) iframes.add(rplayerUrl)
+        }
+
         for (fixedIframe in iframes) {
             try {
+                val domain = fixedIframe.substringAfter("://").substringBefore("/").substringBefore(":")
                 val playerRes = app.get(
                     fixedIframe,
                     headers = mapOf(
                         "Referer" to "$mainUrl/",
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        "User-Agent" to defaultHeaders["User-Agent"]!!
                     )
                 ).text
 
-                // 1. Packed javascript çözümlemesi
+                // 1. Packed JS varsa unpack et
                 val unpacked = getAndUnpack(playerRes)
 
-                // 2. m3u8 veya master playlist yakalama
-                val targetText = "$playerRes\n$unpacked"
+                // 2. Rhino JS motoruyla şifreli stream linklerini çöz
+                val scriptsToRun = mutableListOf<String>()
+                if (unpacked.isNotEmpty()) scriptsToRun.add(unpacked)
+
+                Jsoup.parse(playerRes).select("script").forEach { s ->
+                    val text = s.data()
+                    if (text.contains("charCodeAt") && (text.contains(".split(") || text.contains("eval("))) {
+                        scriptsToRun.add(text)
+                    }
+                }
+
+                val allStreams = mutableListOf<String>()
+                scriptsToRun.distinct().forEach { sc ->
+                    val streams = extractStreamsFromJs(sc, domain, fixedIframe)
+                    allStreams.addAll(streams)
+                }
+
+                val targetText = "$playerRes\n$unpacked\n" + allStreams.joinToString("\n")
                 val m3u8Regex = Regex("""(https?://[^\s"'<>]+\.(?:m3u8|txt)[^\s"'<>]*)""")
                 m3u8Regex.findAll(targetText).forEach { match ->
                     val streamUrl = match.groupValues[1].replace("\\/", "/")
+                    allStreams.add(streamUrl)
+                }
+
+                allStreams.distinct().forEach { streamUrl ->
                     if (streamUrl.contains("master") || streamUrl.contains(".m3u8") || streamUrl.contains("playlist") || streamUrl.contains(".txt?")) {
                         M3u8Helper.generateM3u8(
                             source = this.name,
                             name = this.name,
                             streamUrl = streamUrl,
                             referer = fixedIframe,
-                            headers = mapOf("Referer" to fixedIframe, "Origin" to "https://hdfilmcehennemi.mobi")
+                            headers = mapOf("Referer" to fixedIframe, "Origin" to "https://$domain")
                         ).forEach(callback)
                     }
                 }
@@ -274,7 +423,6 @@ class HdfilmcehennemiProvider : MainAPI() {
                 // ignore
             }
 
-            // Standart Cloudstream oynatıcılarını da çağır (VidMoly vb.)
             try {
                 loadExtractor(fixedIframe, subtitleCallback, callback)
             } catch (e: Exception) {
