@@ -1,0 +1,85 @@
+[
+    {
+        "iconUrl": "https://www.dizibox.live/wp-content/themes/dizibox/images/logo.png",
+        "fileHash": "sha256-443ff90a0b4afb995c35e72de8c1f49203dc375cddf13b0929c3cc7123a1cc6e",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/kevgir447/babayaro",
+        "fileSize": 18293,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "babayaro"
+        ],
+        "tvTypes": [
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "Dizibox",
+        "description": "Dizibox - Yabanc\u0131 Dizi izleme eklentisi",
+        "url": "https://raw.githubusercontent.com/kevgir447/babayaro/builds/Dizibox.cs3",
+        "name": "Dizibox"
+    },
+    {
+        "iconUrl": "https://dizikorea3.com/assets/uploads/site/35ddaa204a2595a43356bf382da10d03.svg",
+        "fileHash": "sha256-90490a23550a0a0e1a7750bffe59bbac182a52140f6dc06377468b67290d86ee",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/kevgir447/babayaro",
+        "fileSize": 18322,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "babayaro"
+        ],
+        "tvTypes": [
+            "TvSeries",
+            "AsianDrama"
+        ],
+        "version": 1,
+        "internalName": "Dizikorea",
+        "description": "Dizikorea - Asya ve Kore Dizileri izleme eklentisi",
+        "url": "https://raw.githubusercontent.com/kevgir447/babayaro/builds/Dizikorea.cs3",
+        "name": "Dizikorea"
+    },
+    {
+        "iconUrl": "https://dizipal1592.com/assets/images/logo-dpal.svg",
+        "fileHash": "sha256-903743362382b4fa0d73e9265e68942a797ed5bd7b4d5fe02788f4ee38d4792b",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/kevgir447/babayaro",
+        "fileSize": 22372,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "babayaro"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "Dizipal",
+        "description": "Dizipal - Film ve Yabanc\u0131 Dizi izleme eklentisi",
+        "url": "https://raw.githubusercontent.com/kevgir447/babayaro/builds/Dizipal.cs3",
+        "name": "Dizipal"
+    },
+    {
+        "iconUrl": "https://www.hdfilmcehennemi.nl/dist/images/logo.svg",
+        "fileHash": "sha256-72004fa4c4edf8cfae54c88bef1f386083920a614dadd9e1418c346d16109c69",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/kevgir447/babayaro",
+        "fileSize": 18467,
+        "status": 1,
+        "language": "tr",
+        "authors": [
+            "babayaro"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "Hdfilmcehennemi",
+        "description": "HDFilmCehennemi - Film ve Dizi izleme eklentisi",
+        "url": "https://raw.githubusercontent.com/kevgir447/babayaro/builds/Hdfilmcehennemi.cs3",
+        "name": "Hdfilmcehennemi"
+    }
+]

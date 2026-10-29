@@ -1,0 +1,8 @@
+{
+  "name": "Babayaro",
+  "description": "Babayaro Türkçe Film ve Dizi Deposu",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/kevgir447/babayaro/builds/plugins.json"
+  ]
+}
