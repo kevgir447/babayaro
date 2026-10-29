@@ -15,10 +15,10 @@ class HdfilmcehennemiProvider : MainAPI() {
     override val hasMainPage = true
 
     override val mainPage = mainPageOf(
-        "$mainUrl/" to "Son Eklenen Filmler",
-        "$mainUrl/imdb-7-puan-uzeri-filmler-2/" to "IMDb 7+ Filmler",
-        "$mainUrl/en-cok-yorumlananlar-2/" to "En Çok Yorumlananlar",
-        "$mainUrl/tur/aksiyon-filmleri-izleyin-1/" to "Aksiyon Filmleri",
+        "$mainUrl/" to "Son Eklenenler",
+        "$mainUrl/imdb-7-puan-uzeri-filmler-2/" to "IMDb 7+ Puan",
+        "$mainUrl/en-cok-yorumlananlar-2/" to "Çok Yorumlananlar",
+        "$mainUrl/tur/aksiyon-filmleri-izleyin-1/" to "Aksiyon",
         "$mainUrl/tur/bilim-kurgu-filmleri-izle-1/" to "Bilim Kurgu"
     )
 
