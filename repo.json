@@ -3,6 +3,6 @@
   "description": "Babayaro Türkçe Film ve Dizi Deposu",
   "manifestVersion": 1,
   "pluginLists": [
-    "https://cdn.jsdelivr.net/gh/kevgir447/babayaro@builds/plugins.json"
+    "https://raw.githubusercontent.com/kevgir447/babayaro/builds/plugins.json"
   ]
 }
