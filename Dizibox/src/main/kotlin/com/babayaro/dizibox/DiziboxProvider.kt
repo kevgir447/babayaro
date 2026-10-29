@@ -2,6 +2,7 @@ package com.babayaro.dizibox
 
 import android.util.Base64
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 import java.security.MessageDigest
