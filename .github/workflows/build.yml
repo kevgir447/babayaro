@@ -61,6 +61,18 @@ jobs:
           ./gradlew make makePluginsJson
           cp **/build/*.cs3 $GITHUB_WORKSPACE/builds/ || true
           cp build/plugins.json $GITHUB_WORKSPACE/builds/
+          
+          # repo.json dosyasını da otomatik oluştur
+          cat <<EOF > $GITHUB_WORKSPACE/builds/repo.json
+          {
+            "name": "Babayaro",
+            "description": "Babayaro Türkçe Film ve Dizi Deposu",
+            "manifestVersion": 1,
+            "pluginLists": [
+              "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/builds/plugins.json"
+            ]
+          }
+          EOF
 
       - name: Push Builds
         run: |
