@@ -25,17 +25,31 @@ class HdfilmcehennemiProvider : MainAPI() {
     private fun Element.toSearchResponse(): SearchResponse? {
         val linkElem = if (this.tagName() == "a") this else (this.selectFirst("a") ?: return null)
         val href = fixUrlNull(linkElem.attr("href")) ?: return null
-        if (href.endsWith("/tur/") || href.endsWith("/kategori/")) return null
+
+        // Menü, kategori, sayfalama ve gereksiz linkleri filtrele
+        if (!href.contains("-izle") && !href.contains("/dizi/")) return null
+        if (href.contains("/kategori/") || href.contains("/tur/") || href.contains("/page/") || href.contains("/sayfa/")) return null
+        if (href.endsWith("/filmler/") || href.endsWith("/diziler/") || href.endsWith("/filmler") || href.endsWith("/diziler")) return null
 
         val title = this.selectFirst("h2, h3, h4, .poster-info h2, .poster-title, .title")?.text()
             ?: linkElem.attr("title").ifEmpty { null }
             ?: this.selectFirst("img")?.attr("alt")?.replace(" izle", "")?.trim()
-            ?: href.substringAfterLast("/").replace("-izle", "").replace("-", " ")
+            ?: return null
+
+        if (title.isBlank() || title.contains("Kategorisi", ignoreCase = true) || title.contains("Sayfa", ignoreCase = true)) return null
 
         val posterUrl = this.selectFirst("img")?.let { img ->
-            val src = img.attr("data-src").ifEmpty { img.attr("src") }
-            if (src.startsWith("data:")) null else fixUrlNull(src)
-        }
+            val src = img.attr("data-cfsrc").ifEmpty {
+                img.attr("data-src").ifEmpty {
+                    img.attr("data-original").ifEmpty {
+                        img.attr("data-lazy-src").ifEmpty {
+                            img.attr("src")
+                        }
+                    }
+                }
+            }
+            if (src.startsWith("data:") || src.isEmpty()) null else fixUrlNull(src)
+        } ?: return null // Afişi olmayan boş menü linklerini ana sayfaya ekleme
 
         val isTv = href.contains("/dizi/")
         val tvType = if (isTv) TvType.TvSeries else TvType.Movie
@@ -62,7 +76,7 @@ class HdfilmcehennemiProvider : MainAPI() {
             )
         ).document
 
-        val items = document.select(".poster-wrapper, .card, article, .poster, .film-item, a.poster, a[href*='-izle']").mapNotNull {
+        val items = document.select(".poster-wrapper, .card, article, .poster, .film-item, a.poster, .col-6, .col-md-3, .col-lg-2").mapNotNull {
             it.toSearchResponse()
         }.distinctBy { it.url }
 
@@ -131,9 +145,18 @@ class HdfilmcehennemiProvider : MainAPI() {
             ?: ""
 
         val posterUrl = document.selectFirst("meta[property=og:image]")?.attr("content")
-            ?: document.selectFirst(".poster-wrapper img, .poster img")?.attr("src")
+            ?: document.selectFirst(".poster-wrapper img, .poster img, img[itemprop=image]")?.let { img ->
+                val src = img.attr("data-cfsrc").ifEmpty {
+                    img.attr("data-src").ifEmpty {
+                        img.attr("src")
+                    }
+                }
+                if (src.startsWith("data:")) null else fixUrlNull(src)
+            }
 
-        val plot = document.selectFirst(".film-content, .overview, .film-synopsis, p.text-muted")?.text()
+        val plot = document.selectFirst(".film-content, .overview, .film-synopsis, p.text-muted, meta[property=og:description]")?.let {
+            if (it.tagName() == "meta") it.attr("content") else it.text()
+        }
 
         val year = document.selectFirst(".meta .year, .year")?.text()?.toIntOrNull()
         val tags = document.select(".tags a, .genres a").map { it.text() }
