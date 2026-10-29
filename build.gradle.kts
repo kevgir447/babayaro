@@ -51,13 +51,13 @@ subprojects {
         }
 
         compileOptions {
-            sourceCompatibility = JavaVersion.VERSION_1_8
-            targetCompatibility = JavaVersion.VERSION_1_8
+            sourceCompatibility = JavaVersion.VERSION_11
+            targetCompatibility = JavaVersion.VERSION_11
         }
 
         tasks.withType<KotlinJvmCompile> {
             compilerOptions {
-                jvmTarget.set(JvmTarget.JVM_1_8) // Required
+                jvmTarget.set(JvmTarget.JVM_11) // Required
                 freeCompilerArgs.addAll(
                     "-Xno-call-assertions",
                     "-Xno-param-assertions",
@@ -79,6 +79,7 @@ subprojects {
         // but you don't need to include any of them if you don't need them.
         // https://github.com/recloudstream/cloudstream/blob/master/app/build.gradle.kts
         implementation(kotlin("stdlib")) // Adds Standard Kotlin Features
+        implementation("org.jspecify:jspecify:1.0.0")
         implementation("com.github.Blatzar:NiceHttp:0.4.11") // HTTP Lib
         implementation("org.jsoup:jsoup:1.18.3") // HTML Parser
         // IMPORTANT: Do not bump Jackson above 2.13.1, as newer versions will

@@ -99,12 +99,11 @@ class DiziboxProvider : MainAPI() {
 
             if (!episodes.any { it.data == epHref }) {
                 episodes.add(
-                    Episode(
-                        data = epHref,
-                        name = epText.ifEmpty { "$seasonNum. Sezon $epNum. Bölüm" },
-                        season = seasonNum,
-                        episode = epNum
-                    )
+                    newEpisode(epHref) {
+                        this.name = epText.ifEmpty { "$seasonNum. Sezon $epNum. Bölüm" }
+                        this.season = seasonNum
+                        this.episode = epNum
+                    }
                 )
             }
         }
@@ -186,6 +185,7 @@ class DiziboxProvider : MainAPI() {
                         if (sheilaUrl != null) {
                             try {
                                 M3u8Helper.generateM3u8(
+                                    source = "$name - MolyStream",
                                     name = "$name - MolyStream",
                                     streamUrl = sheilaUrl,
                                     referer = fixedMoly,
@@ -209,6 +209,7 @@ class DiziboxProvider : MainAPI() {
                                 if (fileMatch != null) {
                                     val streamUrl = fixUrl(fileMatch)
                                     M3u8Helper.generateM3u8(
+                                        source = this.name,
                                         name = this.name,
                                         streamUrl = streamUrl,
                                         referer = fixedMoly,

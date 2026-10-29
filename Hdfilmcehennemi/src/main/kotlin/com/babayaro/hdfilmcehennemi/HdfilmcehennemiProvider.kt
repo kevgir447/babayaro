@@ -141,12 +141,11 @@ class HdfilmcehennemiProvider : MainAPI() {
                 val epNum = Regex("""(\d+)\.\s*b[oö]l[uü]m""", RegexOption.IGNORE_CASE).find(epName)?.groupValues?.get(1)?.toIntOrNull() ?: 1
 
                 episodes.add(
-                    Episode(
-                        data = epHref,
-                        name = epName,
-                        season = seasonNum,
-                        episode = epNum
-                    )
+                    newEpisode(epHref) {
+                        this.name = epName
+                        this.season = seasonNum
+                        this.episode = epNum
+                    }
                 )
             }
 
@@ -193,6 +192,7 @@ class HdfilmcehennemiProvider : MainAPI() {
                         val cleanStreamUrl = streamUrl.replace("\\/", "/")
                         if (cleanStreamUrl.contains("master") || cleanStreamUrl.endsWith(".m3u8")) {
                             M3u8Helper.generateM3u8(
+                                source = this.name,
                                 name = this.name,
                                 streamUrl = cleanStreamUrl,
                                 referer = fixedIframe,

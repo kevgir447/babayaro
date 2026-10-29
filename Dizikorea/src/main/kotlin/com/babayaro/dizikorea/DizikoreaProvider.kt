@@ -124,12 +124,11 @@ class DizikoreaProvider : MainAPI() {
 
             if (!episodes.any { it.data == epHref }) {
                 episodes.add(
-                    Episode(
-                        data = epHref,
-                        name = epText.ifEmpty { "$seasonNum. Sezon $epNum. Bölüm" },
-                        season = seasonNum,
-                        episode = epNum
-                    )
+                    newEpisode(epHref) {
+                        this.name = epText.ifEmpty { "$seasonNum. Sezon $epNum. Bölüm" }
+                        this.season = seasonNum
+                        this.episode = epNum
+                    }
                 )
             }
         }
@@ -165,6 +164,7 @@ class DizikoreaProvider : MainAPI() {
                     m3u8Regex.findAll(combined).forEach { match ->
                         val streamUrl = match.groupValues[1].replace("\\/", "/")
                         M3u8Helper.generateM3u8(
+                            source = "$name - PlayerDKorea",
                             name = "$name - PlayerDKorea",
                             streamUrl = streamUrl,
                             referer = fixedIframe,

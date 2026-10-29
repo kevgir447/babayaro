@@ -143,12 +143,11 @@ class DizipalProvider : MainAPI() {
                             val epNum = ep.episodeNumber ?: (epIdx + 1)
                             val epHref = ep.url?.let { fixUrl(it) } ?: return@forEachIndexed
                             episodes.add(
-                                Episode(
-                                    data = epHref,
-                                    name = ep.name ?: "$seasonNum. Sezon $epNum. Bölüm",
-                                    season = seasonNum,
-                                    episode = epNum
-                                )
+                                newEpisode(epHref) {
+                                    this.name = ep.name ?: "$seasonNum. Sezon $epNum. Bölüm"
+                                    this.season = seasonNum
+                                    this.episode = epNum
+                                }
                             )
                         }
                     }
@@ -167,12 +166,11 @@ class DizipalProvider : MainAPI() {
                     val epNum = sMatch?.groupValues?.get(2)?.toIntOrNull() ?: 1
 
                     episodes.add(
-                        Episode(
-                            data = epHref,
-                            name = epText.ifEmpty { "$seasonNum. Sezon $epNum. Bölüm" },
-                            season = seasonNum,
-                            episode = epNum
-                        )
+                        newEpisode(epHref) {
+                            this.name = epText.ifEmpty { "$seasonNum. Sezon $epNum. Bölüm" }
+                            this.season = seasonNum
+                            this.episode = epNum
+                        }
                     )
                 }
             }
@@ -271,6 +269,7 @@ class DizipalProvider : MainAPI() {
                 if (masterMatch != null) {
                     val masterUrl = masterMatch.replace("\\/", "/")
                     M3u8Helper.generateM3u8(
+                        source = this.name,
                         name = this.name,
                         streamUrl = masterUrl,
                         referer = fixedPlayerUrl,
