@@ -57,16 +57,18 @@ jobs:
           chmod +x gradlew
           ./gradlew make makePluginsJson
           cp **/build/*.cs3 $GITHUB_WORKSPACE/builds/ || true
-          jq 'map(del(.fileHash))' build/plugins.json > $GITHUB_WORKSPACE/builds/plugins.json || cp build/plugins.json $GITHUB_WORKSPACE/builds/
           
-          # repo.json dosyasını da otomatik oluştur
+          # fileHash kaldır ve jsdelivr CDN URL'lerine dönüştür (Türkiye erişim engeli ve hash uyuşmazlığını önlemek için)
+          jq 'map(del(.fileHash))' build/plugins.json | sed "s|https://raw.githubusercontent.com/$GITHUB_REPOSITORY/builds/|https://cdn.jsdelivr.net/gh/$GITHUB_REPOSITORY@builds/|g" > $GITHUB_WORKSPACE/builds/plugins.json
+
+          # repo.json dosyasını da jsdelivr CDN ile oluştur
           cat <<EOF > $GITHUB_WORKSPACE/builds/repo.json
           {
             "name": "Babayaro",
             "description": "Babayaro Türkçe Film ve Dizi Deposu",
             "manifestVersion": 1,
             "pluginLists": [
-              "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/builds/plugins.json"
+              "https://cdn.jsdelivr.net/gh/$GITHUB_REPOSITORY@builds/plugins.json"
             ]
           }
           EOF
