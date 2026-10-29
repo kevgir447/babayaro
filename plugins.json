@@ -62,7 +62,7 @@
     "iconUrl": "https://www.hdfilmcehennemi.nl/dist/images/logo.svg",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/kevgir447/babayaro",
-    "fileSize": 19392,
+    "fileSize": 19927,
     "status": 1,
     "language": "tr",
     "authors": [
@@ -72,7 +72,7 @@
       "Movie",
       "TvSeries"
     ],
-    "version": 3,
+    "version": 4,
     "internalName": "Hdfilmcehennemi",
     "description": "HDFilmCehennemi - Film ve Dizi izleme eklentisi",
     "url": "https://cdn.jsdelivr.net/gh/kevgir447/babayaro@builds/Hdfilmcehennemi.cs3",
