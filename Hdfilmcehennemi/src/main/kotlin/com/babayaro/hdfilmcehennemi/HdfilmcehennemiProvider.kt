@@ -26,15 +26,15 @@ class HdfilmcehennemiProvider : MainAPI() {
         val linkElem = if (this.tagName() == "a") this else (this.selectFirst("a") ?: return null)
         val href = fixUrlNull(linkElem.attr("href")) ?: return null
 
-        // Menü, kategori, sayfalama ve gereksiz linkleri filtrele
-        if (!href.contains("-izle") && !href.contains("/dizi/")) return null
-        if (href.contains("/kategori/") || href.contains("/tur/") || href.contains("/page/") || href.contains("/sayfa/")) return null
-        if (href.endsWith("/filmler/") || href.endsWith("/diziler/") || href.endsWith("/filmler") || href.endsWith("/diziler")) return null
+        val pathSegments = href.substringAfter("://").substringAfter("/").trim('/').split('/').filter { it.isNotEmpty() }
+        val isValidMovie = (pathSegments.size == 1 && (pathSegments[0].contains("-izle") || pathSegments[0].contains("-izleyin"))) ||
+                           (pathSegments.size == 2 && pathSegments[0] == "dizi")
+        if (!isValidMovie) return null
 
         val title = this.selectFirst("h2, h3, h4, .poster-info h2, .poster-title, .title")?.text()
             ?: linkElem.attr("title").ifEmpty { null }
             ?: this.selectFirst("img")?.attr("alt")?.replace(" izle", "")?.trim()
-            ?: return null
+            ?: pathSegments.last().replace("-izle", "").replace("-", " ")
 
         if (title.isBlank() || title.contains("Kategorisi", ignoreCase = true) || title.contains("Sayfa", ignoreCase = true)) return null
 
@@ -48,8 +48,8 @@ class HdfilmcehennemiProvider : MainAPI() {
                     }
                 }
             }
-            if (src.startsWith("data:") || src.isEmpty()) null else fixUrlNull(src)
-        } ?: return null // Afişi olmayan boş menü linklerini ana sayfaya ekleme
+            if (src.startsWith("data:") || src.isEmpty() || src.endsWith(".svg")) null else fixUrlNull(src)
+        } ?: return null // Afişi olmayan sahte kartları kesinlikle atla
 
         val isTv = href.contains("/dizi/")
         val tvType = if (isTv) TvType.TvSeries else TvType.Movie
@@ -76,7 +76,10 @@ class HdfilmcehennemiProvider : MainAPI() {
             )
         ).document
 
-        val items = document.select(".poster-wrapper, .card, article, .poster, .film-item, a.poster, .col-6, .col-md-3, .col-lg-2").mapNotNull {
+        // Üst menü, alt menü ve sidebar'ı temizle
+        document.select("header, footer, nav, .menu, .navbar, .site-header, .site-footer, aside, .sidebar").remove()
+
+        val items = document.select(".poster-wrapper, .card, article, .poster, .film-item, a.poster, .col-6, .col-md-3, .col-lg-2, a[href*='-izle']").mapNotNull {
             it.toSearchResponse()
         }.distinctBy { it.url }
 
