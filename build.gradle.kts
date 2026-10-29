@@ -7,15 +7,16 @@ buildscript {
     repositories {
         google()
         mavenCentral()
-        // Shitpack repo which contains our tools and dependencies
         maven("https://jitpack.io")
     }
 
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
-        // Cloudstream gradle plugin which makes everything work and builds plugins
-        classpath("com.github.recloudstream:gradle:-SNAPSHOT")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.0")
+        classpath(files("gradle/plugins/cloudstream-gradle.jar"))
+        classpath("org.ow2.asm:asm:9.9.1")
+        classpath("org.ow2.asm:asm-tree:9.9.1")
+        classpath("com.github.vidstige:jadb:v1.2.1")
     }
 }
 
