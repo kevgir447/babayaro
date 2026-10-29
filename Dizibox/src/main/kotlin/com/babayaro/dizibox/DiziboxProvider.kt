@@ -24,16 +24,18 @@ class DiziboxProvider : MainAPI() {
     )
 
     private fun Element.toSearchResponse(): SearchResponse? {
-        val link = this.selectFirst("a") ?: return null
-        val href = fixUrl(link.attr("href"))
-        val title = this.selectFirst(".title, h2, h3, h4, .entry-title")?.text()
-            ?: link.attr("title").ifEmpty { null }
+        val link = if (this.tagName() == "a") this else (this.selectFirst("a.poster-title, a.episode-card-title, a") ?: return null)
+        val href = fixUrlNull(link.attr("href")) ?: return null
+
+        val title = link.attr("title").ifEmpty { null }
+            ?: this.selectFirst(".series-name, .poster-title, h2, h3, h4, .title")?.text()
             ?: this.selectFirst("img")?.attr("alt")?.ifEmpty { null }
             ?: return null
 
-        val posterUrl = this.selectFirst("img")?.let {
-            it.attr("src").ifEmpty { it.attr("data-src") }
-        }?.let { fixUrl(it) }
+        val posterUrl = this.selectFirst("img")?.let { img ->
+            val src = img.attr("data-src").ifEmpty { img.attr("data-original") }.ifEmpty { img.attr("src") }
+            if (src.startsWith("data:")) null else fixUrlNull(src)
+        }
 
         return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
             this.posterUrl = posterUrl
@@ -41,10 +43,19 @@ class DiziboxProvider : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page <= 1) request.data else "${request.data}page/$page/"
+        val url = if (page <= 1) {
+            request.data
+        } else {
+            if (request.data.contains("?")) {
+                val parts = request.data.split("?")
+                "${parts[0]}page/$page/?${parts[1]}"
+            } else {
+                "${request.data}page/$page/"
+            }
+        }
         val document = app.get(url).document
 
-        val items = document.select("article, .post, .dizibox-list li, .archive-item").mapNotNull {
+        val items = document.select("article, .article-series-poster, .article-episode-card, .post, .dizibox-list li, .archive-item").mapNotNull {
             it.toSearchResponse()
         }.distinctBy { it.url }
 

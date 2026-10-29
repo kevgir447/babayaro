@@ -22,16 +22,19 @@ class DizikoreaProvider : MainAPI() {
     )
 
     private fun Element.toSearchResponse(): SearchResponse? {
-        val link = this.selectFirst("a") ?: return null
-        val href = fixUrl(link.attr("href"))
-        val title = this.selectFirst(".title, h2, h3, h4, span.title")?.text()
-            ?: link.attr("title").ifEmpty { null }
-            ?: this.selectFirst("img")?.attr("alt")?.ifEmpty { null }
-            ?: return null
+        val link = if (this.tagName() == "a") this else (this.selectFirst("a") ?: return null)
+        val href = fixUrlNull(link.attr("href")) ?: return null
+        if (href.endsWith("/dizi") || href.endsWith("/film")) return null
 
-        val posterUrl = this.selectFirst("img")?.let {
-            it.attr("src").ifEmpty { it.attr("data-src") }
-        }?.let { fixUrl(it) }
+        val title = link.attr("title").ifEmpty { null }
+            ?: this.selectFirst(".title, h2, h3, h4, span.title, .site-sidebar-trend-title")?.text()
+            ?: this.selectFirst("img")?.attr("alt")?.ifEmpty { null }
+            ?: href.substringAfterLast("/").replace("-izle", "").replace("-", " ")
+
+        val posterUrl = this.selectFirst("img")?.let { img ->
+            val src = img.attr("data-src").ifEmpty { img.attr("src") }
+            if (src.startsWith("data:")) null else fixUrlNull(src)
+        }
 
         return newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
             this.posterUrl = posterUrl
@@ -40,9 +43,9 @@ class DizikoreaProvider : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = if (page <= 1) request.data else "${request.data}?sayfa=$page"
-        val document = app.get(url).document
+        val document = app.get(url, headers = mapOf("Referer" to "$mainUrl/")).document
 
-        val items = document.select(".site-sidebar-trend-item, .series-card, .poster-item, a[href*='/dizi/']").mapNotNull {
+        val items = document.select("a.dual-slide-card, a.site-sidebar-trend-item, .series-card, .poster-item, a[href*='/dizi/'], a[href*='/film/']").mapNotNull {
             it.toSearchResponse()
         }.distinctBy { it.url }
 

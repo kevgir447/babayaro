@@ -20,24 +20,29 @@ class DizipalProvider : MainAPI() {
     override val hasMainPage = true
 
     override val mainPage = mainPageOf(
-        "$mainUrl/yabanci-dizi-izle" to "Popüler Yabancı Diziler",
-        "$mainUrl/film-izle" to "Popüler Filmler",
-        "$mainUrl/yeni-eklenen-dizi-bolumler" to "Son Eklenen Bölümler"
+        "$mainUrl/" to "Gündemdeki Diziler ve Filmler",
+        "$mainUrl/yeni-eklenen-dizi-bolumler" to "Yeni Eklenen Bölümler",
+        "$mainUrl/kesfet" to "Keşfet",
+        "$mainUrl/trendler" to "Trendler"
     )
 
     private fun Element.toSearchResponse(): SearchResponse? {
-        val link = this.selectFirst("a") ?: return null
-        val href = fixUrl(link.attr("href"))
-        val title = this.selectFirst(".title, h2, h3, h4")?.text()
+        val link = if (this.tagName() == "a") this else (this.selectFirst("a") ?: return null)
+        val href = fixUrlNull(link.attr("href")) ?: return null
+        if (href.endsWith("/series/") || href.endsWith("/film/")) return null
+
+        val title = this.selectFirst("span[style*='font-weight:700'], span[style*='font-weight: 700'], h2, h3, h4, .title")?.text()
             ?: link.attr("title").ifEmpty { null }
+            ?: link.attr("aria-label").ifEmpty { null }
             ?: this.selectFirst("img")?.attr("alt")?.ifEmpty { null }
-            ?: return null
+            ?: href.substringAfterLast("/").replace("-", " ").capitalize()
 
-        val posterUrl = this.selectFirst("img")?.let {
-            it.attr("src").ifEmpty { it.attr("data-src") }
-        }?.let { fixUrl(it) }
+        val posterUrl = this.selectFirst("img")?.let { img ->
+            val src = img.attr("data-src").ifEmpty { img.attr("src") }
+            if (src.startsWith("data:")) null else fixUrlNull(src)
+        }
 
-        val isTv = href.contains("/series/") || href.contains("/dizi")
+        val isTv = href.contains("/series/") || href.contains("/bolum/")
         val tvType = if (isTv) TvType.TvSeries else TvType.Movie
 
         return if (isTv) {
@@ -53,9 +58,9 @@ class DizipalProvider : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = if (page <= 1) request.data else "${request.data}?sayfa=$page"
-        val document = app.get(url).document
+        val document = app.get(url, headers = mapOf("Referer" to "$mainUrl/")).document
 
-        val items = document.select("article, .card, a[href*='/series/'], a[href*='/film/']").mapNotNull {
+        val items = document.select("a.tc, a.sr, a.ecl, a[href*='/series/'], a[href*='/film/'], a[href*='/bolum/'], article, .card").mapNotNull {
             it.toSearchResponse()
         }.distinctBy { it.url }
 

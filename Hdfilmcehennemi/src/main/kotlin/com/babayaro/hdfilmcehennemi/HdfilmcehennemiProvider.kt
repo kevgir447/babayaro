@@ -16,25 +16,26 @@ class HdfilmcehennemiProvider : MainAPI() {
 
     override val mainPage = mainPageOf(
         "$mainUrl/" to "Son Eklenen Filmler",
-        "$mainUrl/populer-filmleri-izle-3/" to "Popüler Filmler",
+        "$mainUrl/imdb-7-puan-uzeri-filmler-2/" to "IMDb 7+ Filmler",
+        "$mainUrl/en-cok-yorumlananlar-2/" to "En Çok Yorumlananlar",
         "$mainUrl/tur/aksiyon-filmleri-izleyin-1/" to "Aksiyon Filmleri",
-        "$mainUrl/tur/komedi-filmleri-izleyin-1/" to "Komedi Filmleri",
         "$mainUrl/tur/bilim-kurgu-filmleri-izle-1/" to "Bilim Kurgu"
     )
 
     private fun Element.toSearchResponse(): SearchResponse? {
-        val linkElem = this.selectFirst("a") ?: return null
+        val linkElem = if (this.tagName() == "a") this else (this.selectFirst("a") ?: return null)
         val href = fixUrlNull(linkElem.attr("href")) ?: return null
-        val title = this.selectFirst("h2, h3, h4, .poster-info h2, .poster-title")?.text()
+        if (href.endsWith("/tur/") || href.endsWith("/kategori/")) return null
+
+        val title = this.selectFirst("h2, h3, h4, .poster-info h2, .poster-title, .title")?.text()
             ?: linkElem.attr("title").ifEmpty { null }
             ?: this.selectFirst("img")?.attr("alt")?.replace(" izle", "")?.trim()
-            ?: return null
+            ?: href.substringAfterLast("/").replace("-izle", "").replace("-", " ")
 
         val posterUrl = this.selectFirst("img")?.let { img ->
-            img.attr("data-src").ifEmpty {
-                img.attr("src")
-            }
-        }?.let { fixUrl(it) }
+            val src = img.attr("data-src").ifEmpty { img.attr("src") }
+            if (src.startsWith("data:")) null else fixUrlNull(src)
+        }
 
         val isTv = href.contains("/dizi/")
         val tvType = if (isTv) TvType.TvSeries else TvType.Movie
@@ -52,11 +53,18 @@ class HdfilmcehennemiProvider : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = if (page <= 1) request.data else "${request.data}page/$page/"
-        val document = app.get(url).document
+        val document = app.get(
+            url,
+            headers = mapOf(
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Referer" to "$mainUrl/"
+            )
+        ).document
 
-        val items = document.select(".poster-wrapper, .card, article").mapNotNull {
+        val items = document.select(".poster-wrapper, .card, article, .poster, .film-item, a.poster, a[href*='-izle']").mapNotNull {
             it.toSearchResponse()
-        }
+        }.distinctBy { it.url }
 
         return newHomePageResponse(
             list = HomePageList(
