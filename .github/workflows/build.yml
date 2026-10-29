@@ -57,7 +57,7 @@ jobs:
           chmod +x gradlew
           ./gradlew make makePluginsJson
           cp **/build/*.cs3 $GITHUB_WORKSPACE/builds/ || true
-          cp build/plugins.json $GITHUB_WORKSPACE/builds/
+          jq 'map(del(.fileHash))' build/plugins.json > $GITHUB_WORKSPACE/builds/plugins.json || cp build/plugins.json $GITHUB_WORKSPACE/builds/
           
           # repo.json dosyasını da otomatik oluştur
           cat <<EOF > $GITHUB_WORKSPACE/builds/repo.json
