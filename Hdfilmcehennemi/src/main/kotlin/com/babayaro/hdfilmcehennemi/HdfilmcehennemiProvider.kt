@@ -80,16 +80,15 @@ class HdfilmcehennemiProvider : MainAPI() {
         }
     }
 
+    private val defaultHeaders = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer" to "https://www.hdfilmcehennemi.nl/"
+    )
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = if (page <= 1) request.data else "${request.data}page/$page/"
-        val document = app.get(
-            url,
-            headers = mapOf(
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
-                "Referer" to "$mainUrl/"
-            )
-        ).document
+        val document = app.get(url, headers = defaultHeaders).document
 
         // Üst menü, alt menü ve sidebar'ı temizle
         document.select("header, footer, nav, .menu, .navbar, .site-header, .site-footer, aside, .sidebar").remove()
@@ -119,6 +118,7 @@ class HdfilmcehennemiProvider : MainAPI() {
             val res = app.get(
                 searchUrl,
                 headers = mapOf(
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
                     "X-Requested-With" to "fetch",
                     "Content-Type" to "application/json",
                     "Referer" to "$mainUrl/"
@@ -156,9 +156,9 @@ class HdfilmcehennemiProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val document = app.get(url).document
+        val document = app.get(url, headers = defaultHeaders).document
 
-        val title = document.selectFirst("h1.title, h1")?.text()
+        val title = document.selectFirst("h1.title, h1, .movie-title, .film-title")?.text()
             ?: document.selectFirst("meta[property=og:title]")?.attr("content")
             ?: ""
 
@@ -166,18 +166,20 @@ class HdfilmcehennemiProvider : MainAPI() {
             ?: document.selectFirst(".poster-wrapper img, .poster img, img[itemprop=image]")?.let { img ->
                 val src = img.attr("data-cfsrc").ifEmpty {
                     img.attr("data-src").ifEmpty {
-                        img.attr("src")
+                        img.attr("data-original").ifEmpty {
+                            img.attr("src")
+                        }
                     }
                 }
                 if (src.startsWith("data:")) null else fixUrlNull(src)
             }
 
-        val plot = document.selectFirst(".film-content, .overview, .film-synopsis, p.text-muted, meta[property=og:description]")?.let {
+        val plot = document.selectFirst(".film-content, .overview, .film-synopsis, p.text-muted, meta[property=og:description], .story, #film-content")?.let {
             if (it.tagName() == "meta") it.attr("content") else it.text()
         }
 
-        val year = document.selectFirst(".meta .year, .year")?.text()?.toIntOrNull()
-        val tags = document.select(".tags a, .genres a").map { it.text() }
+        val year = document.selectFirst(".meta .year, .year, a[href*=-filmleri-izle]")?.text()?.filter { it.isDigit() }?.toIntOrNull()
+        val tags = document.select(".tags a, .genres a, a[href*=/tur/]").map { it.text() }
 
         val isTv = url.contains("/dizi/") || document.select(".season-tab, .episode-item").isNotEmpty()
 
@@ -220,9 +222,9 @@ class HdfilmcehennemiProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data).document
-        val iframes = document.select("iframe, a[data-src], nav.nav-tabs a, .card-video a").mapNotNull {
-            val src = it.attr("src").ifEmpty { it.attr("data-src") }
+        val document = app.get(data, headers = defaultHeaders).document
+        val iframes = document.select("iframe, a[data-src], nav.nav-tabs a, .card-video a, button[data-src], div[data-src]").mapNotNull {
+            val src = it.attr("data-src").ifEmpty { it.attr("src") }
             if (src.isNotEmpty()) fixUrl(src) else null
         }.distinct().toMutableList()
 
