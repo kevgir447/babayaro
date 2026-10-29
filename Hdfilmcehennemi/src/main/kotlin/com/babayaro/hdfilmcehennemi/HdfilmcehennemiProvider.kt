@@ -15,11 +15,11 @@ class HdfilmcehennemiProvider : MainAPI() {
     override val hasMainPage = true
 
     override val mainPage = mainPageOf(
-        "$mainUrl/" to "Son Eklenenler",
-        "$mainUrl/imdb-7-puan-uzeri-filmler-2/" to "IMDb 7+ Puan",
-        "$mainUrl/en-cok-yorumlananlar-2/" to "Çok Yorumlananlar",
-        "$mainUrl/tur/aksiyon-filmleri-izleyin-1/" to "Aksiyon",
-        "$mainUrl/tur/bilim-kurgu-filmleri-izle-1/" to "Bilim Kurgu"
+        "$mainUrl/" to "Vizyondakiler",
+        "$mainUrl/imdb-7-puan-uzeri-filmler-2/" to "IMDb 7 Üzeri",
+        "$mainUrl/en-cok-yorumlananlar-2/" to "En Popüler Filmler",
+        "$mainUrl/tur/aksiyon-filmleri-izleyin-1/" to "Aksiyon Macera",
+        "$mainUrl/tur/bilim-kurgu-filmleri-izle-1/" to "Bilim Kurgu ve Fantastik"
     )
 
     private fun Element.toSearchResponse(): SearchResponse? {
@@ -27,7 +27,18 @@ class HdfilmcehennemiProvider : MainAPI() {
         val href = fixUrlNull(linkElem.attr("href")) ?: return null
 
         val pathSegments = href.substringAfter("://").substringAfter("/").trim('/').split('/').filter { it.isNotEmpty() }
-        val isValidMovie = (pathSegments.size == 1 && (pathSegments[0].contains("-izle") || pathSegments[0].contains("-izleyin"))) ||
+        val slug = pathSegments.firstOrNull() ?: return null
+
+        // Kategori, tür, yıl, sayfa ve liste linklerini kesinlikle atla
+        if (slug.contains("filmleri", ignoreCase = true) ||
+            slug.contains("dizileri", ignoreCase = true) ||
+            slug.contains("kategori", ignoreCase = true) ||
+            slug.contains("tur-", ignoreCase = true) ||
+            href.contains("/tur/") || href.contains("/kategori/") || href.contains("/yil/") || href.contains("/page/")) {
+            return null
+        }
+
+        val isValidMovie = (pathSegments.size == 1 && (slug.contains("-izle") || slug.contains("-izleyin"))) ||
                            (pathSegments.size == 2 && pathSegments[0] == "dizi")
         if (!isValidMovie) return null
 
@@ -36,7 +47,11 @@ class HdfilmcehennemiProvider : MainAPI() {
             ?: this.selectFirst("img")?.attr("alt")?.replace(" izle", "")?.trim()
             ?: pathSegments.last().replace("-izle", "").replace("-", " ")
 
-        if (title.isBlank() || title.contains("Kategorisi", ignoreCase = true) || title.contains("Sayfa", ignoreCase = true)) return null
+        if (title.isBlank() ||
+            title.contains("Filmleri", ignoreCase = true) ||
+            title.contains("Kategorisi", ignoreCase = true) ||
+            title.contains("Sayfa", ignoreCase = true) ||
+            title.contains("HDFilmCehennemi", ignoreCase = true)) return null
 
         val posterUrl = this.selectFirst("img")?.let { img ->
             val src = img.attr("data-cfsrc").ifEmpty {
@@ -79,7 +94,7 @@ class HdfilmcehennemiProvider : MainAPI() {
         // Üst menü, alt menü ve sidebar'ı temizle
         document.select("header, footer, nav, .menu, .navbar, .site-header, .site-footer, aside, .sidebar").remove()
 
-        val items = document.select(".poster-wrapper, .card, article, .poster, .film-item, a.poster, .col-6, .col-md-3, .col-lg-2, a[href*='-izle']").mapNotNull {
+        val items = document.select(".poster-wrapper, .card, article, .poster, .film-item, a.poster").mapNotNull {
             it.toSearchResponse()
         }.distinctBy { it.url }
 

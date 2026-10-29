@@ -7,4 +7,4 @@ cloudstream {
     iconUrl = "https://www.hdfilmcehennemi.nl/dist/images/logo.svg"
 }
 
-version = 6
+version = 7
