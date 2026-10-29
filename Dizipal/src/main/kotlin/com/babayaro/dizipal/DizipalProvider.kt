@@ -250,26 +250,50 @@ class DizipalProvider : MainAPI() {
         val html = app.get(data).text
 
         // Next.js payload içinden enc ve k değerlerini yakala
-        val cipherMatch = Regex("""ciphertext\\?":\s*\\?"([^\\"]+)\\?"""").find(html)?.groupValues?.get(1)
-        val ivMatch = Regex("""iv\\?":\s*\\?"([a-f0-9]+)\\?"""").find(html)?.groupValues?.get(1)
-        val saltMatch = Regex("""salt\\?":\s*\\?"([a-f0-9]+)\\?"""").find(html)?.groupValues?.get(1)
-        val keyMatch = Regex("""k\\?":\s*\\?"([^\\"]+)\\?"""").find(html)?.groupValues?.get(1)
+        val cleanHtml = html.replace("\\\\", "").replace("\\\"", "\"")
+        val encMatch = Regex(""""enc"\s*:\s*\{"ciphertext"\s*:\s*"([^"]+)"\s*,\s*"iv"\s*:\s*"([^"]+)"\s*,\s*"salt"\s*:\s*"([^"]+)"\}\s*,\s*"k"\s*:\s*"([^"]+)"""").find(cleanHtml)
 
-        if (cipherMatch != null && ivMatch != null && saltMatch != null && keyMatch != null) {
+        var playerUrl: String? = null
+        if (encMatch != null) {
+            val cipher = encMatch.groupValues[1]
+            val iv = encMatch.groupValues[2]
+            val salt = encMatch.groupValues[3]
+            val key = encMatch.groupValues[4]
             try {
-                val decryptedPlayerUrl = decryptDizipal(cipherMatch, ivMatch, saltMatch, keyMatch)
-                val fixedPlayerUrl = if (decryptedPlayerUrl.startsWith("//")) "https:$decryptedPlayerUrl" else decryptedPlayerUrl
+                val decrypted = decryptDizipal(cipher, iv, salt, key)
+                playerUrl = if (decrypted.startsWith("//")) "https:$decrypted" else decrypted
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
 
+        if (playerUrl != null) {
+            try {
                 // dplayer82 player sayfasını getir
                 val playerHtml = app.get(
-                    fixedPlayerUrl,
+                    playerUrl,
                     headers = mapOf(
                         "Referer" to "$mainUrl/",
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                     )
                 ).text
 
-                // Master m3u8 linkini ayıkla
+                // Master m3u8 veya m3u8 linklerini ayıkla
+                val m3u8Regex = Regex("""(https?://[^\s"'<>]+\.m3u8[^\s"'<>]*)""")
+                m3u8Regex.findAll(playerHtml).forEach { match ->
+                    val streamUrl = match.groupValues[1].replace("\\/", "/")
+                    M3u8Helper.generateM3u8(
+                        source = this.name,
+                        name = this.name,
+                        streamUrl = streamUrl,
+                        referer = playerUrl,
+                        headers = mapOf(
+                            "Referer" to playerUrl,
+                            "Origin" to "https://four.dplayer82.site"
+                        )
+                    ).forEach(callback)
+                }
+
                 val masterMatch = Regex(""""master"\s*:\s*"([^"]+)"""").find(playerHtml)?.groupValues?.get(1)
                 if (masterMatch != null) {
                     val masterUrl = masterMatch.replace("\\/", "/")
@@ -277,9 +301,9 @@ class DizipalProvider : MainAPI() {
                         source = this.name,
                         name = this.name,
                         streamUrl = masterUrl,
-                        referer = fixedPlayerUrl,
+                        referer = playerUrl,
                         headers = mapOf(
-                            "Referer" to fixedPlayerUrl,
+                            "Referer" to playerUrl,
                             "Origin" to "https://four.dplayer82.site"
                         )
                     ).forEach(callback)
@@ -297,13 +321,31 @@ class DizipalProvider : MainAPI() {
                         )
                     )
                 }
+            } catch (e: Exception) {
+                // ignore
+            }
 
-                return true
+            try {
+                loadExtractor(playerUrl, subtitleCallback, callback)
             } catch (e: Exception) {
                 // ignore
             }
         }
 
-        return false
+        // Sayfa içindeki standart iframe'ler varsa kontrol et
+        val doc = org.jsoup.Jsoup.parse(html)
+        doc.select("iframe").forEach { iframe ->
+            val src = iframe.attr("src").ifEmpty { iframe.attr("data-src") }
+            if (src.isNotEmpty()) {
+                val fixed = fixUrl(src)
+                try {
+                    loadExtractor(fixed, subtitleCallback, callback)
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+        }
+
+        return true
     }
 }

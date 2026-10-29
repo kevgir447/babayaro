@@ -174,16 +174,23 @@ class DiziboxProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(data).document
-        val iframes = document.select("iframe").map { it.attr("src") }.toMutableList()
+        val iframes = document.select("iframe").mapNotNull {
+            val src = it.attr("src").ifEmpty { it.attr("data-src") }
+            if (src.isNotEmpty()) fixUrl(src) else null
+        }.distinct().toMutableList()
 
-        for (iframe in iframes) {
-            val fixedIframe = fixUrl(iframe)
-
+        for (fixedIframe in iframes) {
             // Dizibox King Player
             if (fixedIframe.contains("/player/king/")) {
                 try {
-                    val kingHtml = app.get(fixedIframe, headers = mapOf("Referer" to "$mainUrl/")).text
-                    val molyIframe = Regex("""<iframe[^>]+src=["']([^"']+)["']""").find(kingHtml)?.groupValues?.get(1)
+                    val kingHtml = app.get(
+                        fixedIframe,
+                        headers = mapOf(
+                            "Referer" to "$mainUrl/",
+                            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                        )
+                    ).text
+                    val molyIframe = Regex("""<iframe[^>]+(?:src|data-src)=["']([^"']+)["']""").find(kingHtml)?.groupValues?.get(1)
 
                     if (molyIframe != null) {
                         val fixedMoly = fixUrl(molyIframe)
@@ -209,6 +216,18 @@ class DiziboxProvider : MainAPI() {
 
                         // 2. CryptoJS şifre çözücü ile kontrol
                         val molyHtml = app.get(fixedMoly, headers = mapOf("Referer" to "$mainUrl/")).text
+                        val m3u8Regex = Regex("""(https?://[^\s"'<>]+\.m3u8[^\s"'<>]*)""")
+                        m3u8Regex.findAll(molyHtml).forEach { match ->
+                            val streamUrl = match.groupValues[1].replace("\\/", "/")
+                            M3u8Helper.generateM3u8(
+                                source = "$name - MolyStream",
+                                name = "$name - MolyStream",
+                                streamUrl = streamUrl,
+                                referer = fixedMoly,
+                                headers = mapOf("Referer" to fixedMoly)
+                            ).forEach(callback)
+                        }
+
                         val cryptoMatch = Regex("""CryptoJS\.AES\.decrypt\(\"([^\"]+)\"\s*,\s*\"([^\"]+)\"\)""").find(molyHtml)
                         if (cryptoMatch != null) {
                             val ct = cryptoMatch.groupValues[1]
@@ -230,7 +249,11 @@ class DiziboxProvider : MainAPI() {
                             }
                         }
 
-                        loadExtractor(fixedMoly, subtitleCallback, callback)
+                        try {
+                            loadExtractor(fixedMoly, subtitleCallback, callback)
+                        } catch (e: Exception) {
+                            // ignore
+                        }
                     }
                 } catch (e: Exception) {
                     // ignore
@@ -238,7 +261,11 @@ class DiziboxProvider : MainAPI() {
             }
 
             // Diğer tüm oynatıcıları otomatik tara
-            loadExtractor(fixedIframe, subtitleCallback, callback)
+            try {
+                loadExtractor(fixedIframe, subtitleCallback, callback)
+            } catch (e: Exception) {
+                // ignore
+            }
         }
 
         return true

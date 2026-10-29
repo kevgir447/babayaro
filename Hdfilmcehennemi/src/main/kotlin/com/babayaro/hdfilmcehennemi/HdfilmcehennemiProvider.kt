@@ -180,54 +180,63 @@ class HdfilmcehennemiProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(data).document
-        val iframes = document.select("iframe").map { it.attr("src") }.toMutableList()
+        val iframes = document.select("iframe, a[data-src], nav.nav-tabs a, .card-video a").mapNotNull {
+            val src = it.attr("src").ifEmpty { it.attr("data-src") }
+            if (src.isNotEmpty()) fixUrl(src) else null
+        }.distinct().toMutableList()
 
         // Sayfa içindeki tüm iframe ve player kaynaklarını tara
-        for (iframe in iframes) {
-            val fixedIframe = fixUrl(iframe)
-            if (fixedIframe.contains("hdfilmcehennemi.mobi") || fixedIframe.contains("rapidrame") || fixedIframe.contains("embed")) {
-                try {
-                    val playerRes = app.get(fixedIframe, headers = mapOf("Referer" to "$mainUrl/")).text
+        for (fixedIframe in iframes) {
+            try {
+                val playerRes = app.get(
+                    fixedIframe,
+                    headers = mapOf(
+                        "Referer" to "$mainUrl/",
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    )
+                ).text
 
-                    // 1. Packed javascript çözümlemesi
-                    val unpacked = getAndUnpack(playerRes)
+                // 1. Packed javascript çözümlemesi
+                val unpacked = getAndUnpack(playerRes)
 
-                    // 2. m3u8 veya master playlist yakalama
-                    val targetText = "$playerRes\n$unpacked"
-                    val m3u8Regex = Regex("""(https?://[^\s"'<>]+\.(?:m3u8|txt)[^\s"'<>]*)""")
-                    m3u8Regex.findAll(targetText).forEach { match ->
-                        val streamUrl = match.groupValues[1]
-                        val cleanStreamUrl = streamUrl.replace("\\/", "/")
-                        if (cleanStreamUrl.contains("master") || cleanStreamUrl.endsWith(".m3u8")) {
-                            M3u8Helper.generateM3u8(
-                                source = this.name,
-                                name = this.name,
-                                streamUrl = cleanStreamUrl,
-                                referer = fixedIframe,
-                                headers = mapOf("Referer" to fixedIframe, "Origin" to "https://hdfilmcehennemi.mobi")
-                            ).forEach(callback)
-                        }
+                // 2. m3u8 veya master playlist yakalama
+                val targetText = "$playerRes\n$unpacked"
+                val m3u8Regex = Regex("""(https?://[^\s"'<>]+\.(?:m3u8|txt)[^\s"'<>]*)""")
+                m3u8Regex.findAll(targetText).forEach { match ->
+                    val streamUrl = match.groupValues[1].replace("\\/", "/")
+                    if (streamUrl.contains("master") || streamUrl.contains(".m3u8") || streamUrl.contains("playlist") || streamUrl.contains(".txt?")) {
+                        M3u8Helper.generateM3u8(
+                            source = this.name,
+                            name = this.name,
+                            streamUrl = streamUrl,
+                            referer = fixedIframe,
+                            headers = mapOf("Referer" to fixedIframe, "Origin" to "https://hdfilmcehennemi.mobi")
+                        ).forEach(callback)
                     }
-
-                    // 3. VTT altyazıları çekme
-                    val subRegex = Regex(""""file"\s*:\s*"([^"]+\.vtt)"[^}]*"label"\s*:\s*"([^"]+)"""")
-                    subRegex.findAll(targetText).forEach { subMatch ->
-                        val subFile = subMatch.groupValues[1].replace("\\/", "/")
-                        val subLabel = subMatch.groupValues[2]
-                        subtitleCallback.invoke(
-                            SubtitleFile(
-                                lang = subLabel,
-                                url = subFile
-                            )
-                        )
-                    }
-                } catch (e: Exception) {
-                    // ignore
                 }
+
+                // 3. VTT altyazıları çekme
+                val subRegex = Regex(""""file"\s*:\s*"([^"]+\.vtt)"[^}]*"label"\s*:\s*"([^"]+)"""")
+                subRegex.findAll(targetText).forEach { subMatch ->
+                    val subFile = subMatch.groupValues[1].replace("\\/", "/")
+                    val subLabel = subMatch.groupValues[2]
+                    subtitleCallback.invoke(
+                        SubtitleFile(
+                            lang = subLabel,
+                            url = subFile
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                // ignore
             }
 
             // Standart Cloudstream oynatıcılarını da çağır (VidMoly vb.)
-            loadExtractor(fixedIframe, subtitleCallback, callback)
+            try {
+                loadExtractor(fixedIframe, subtitleCallback, callback)
+            } catch (e: Exception) {
+                // ignore
+            }
         }
 
         return true

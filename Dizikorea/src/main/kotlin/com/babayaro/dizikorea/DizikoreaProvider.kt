@@ -151,47 +151,57 @@ class DizikoreaProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(data).document
-        val iframes = document.select("iframe").map { it.attr("src") }.toMutableList()
+        val iframes = document.select("iframe").mapNotNull {
+            val src = it.attr("src").ifEmpty { it.attr("data-src") }
+            if (src.isNotEmpty()) fixUrl(src) else null
+        }.distinct().toMutableList()
 
-        for (iframe in iframes) {
-            val fixedIframe = fixUrl(iframe)
+        for (fixedIframe in iframes) {
+            // VidMoly, PlayerDKorea ve diğer oynatıcıların HTML'inden doğrudan m3u8 çekme
+            try {
+                val playerHtml = app.get(
+                    fixedIframe,
+                    headers = mapOf(
+                        "Referer" to "$mainUrl/",
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    )
+                ).text
+                val unpacked = getAndUnpack(playerHtml)
+                val combined = "$playerHtml\n$unpacked"
 
-            // PlayerDkorea kaynağını çöz
-            if (fixedIframe.contains("playerdkorea") || fixedIframe.contains("playerkorea")) {
-                try {
-                    val playerHtml = app.get(fixedIframe, headers = mapOf("Referer" to "$mainUrl/")).text
-                    val unpacked = getAndUnpack(playerHtml)
-                    val combined = "$playerHtml\n$unpacked"
-
-                    val m3u8Regex = Regex("""(https?://[^\s"'<>]+\.m3u8[^\s"'<>]*)""")
-                    m3u8Regex.findAll(combined).forEach { match ->
-                        val streamUrl = match.groupValues[1].replace("\\/", "/")
-                        M3u8Helper.generateM3u8(
-                            source = "$name - PlayerDKorea",
-                            name = "$name - PlayerDKorea",
-                            streamUrl = streamUrl,
-                            referer = fixedIframe,
-                            headers = mapOf("Referer" to fixedIframe)
-                        ).forEach(callback)
-                    }
-
-                    // VTT Altyazı kontrolü
-                    val subRegex = Regex("""(https?://[^\s"'<>]+\.vtt[^\s"'<>]*)""")
-                    subRegex.findAll(combined).forEach { match ->
-                        subtitleCallback.invoke(
-                            SubtitleFile(
-                                lang = "Türkçe",
-                                url = match.groupValues[1].replace("\\/", "/")
-                            )
-                        )
-                    }
-                } catch (e: Exception) {
-                    // ignore
+                val m3u8Regex = Regex("""(https?://[^\s"'<>]+\.m3u8[^\s"'<>]*)""")
+                m3u8Regex.findAll(combined).forEach { match ->
+                    val streamUrl = match.groupValues[1].replace("\\/", "/")
+                    val sourceName = if (fixedIframe.contains("vidmoly")) "VidMoly" else name
+                    M3u8Helper.generateM3u8(
+                        source = sourceName,
+                        name = sourceName,
+                        streamUrl = streamUrl,
+                        referer = fixedIframe,
+                        headers = mapOf("Referer" to fixedIframe)
+                    ).forEach(callback)
                 }
+
+                // VTT Altyazı kontrolü
+                val subRegex = Regex("""(https?://[^\s"'<>]+\.vtt[^\s"'<>]*)""")
+                subRegex.findAll(combined).forEach { match ->
+                    subtitleCallback.invoke(
+                        SubtitleFile(
+                            lang = "Türkçe",
+                            url = match.groupValues[1].replace("\\/", "/")
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                // ignore
             }
 
-            // VidMoly, Filemoon ve diğer oynatıcıları otomatik aktar
-            loadExtractor(fixedIframe, subtitleCallback, callback)
+            // Standart Cloudstream oynatıcılarını da çağır
+            try {
+                loadExtractor(fixedIframe, subtitleCallback, callback)
+            } catch (e: Exception) {
+                // ignore
+            }
         }
 
         return true
