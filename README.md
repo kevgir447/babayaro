@@ -11,6 +11,7 @@ Cloudstream için yüksek performanslı, kararlı ve otomatik oynatma destekli T
 | **HDFilmCehennemi** | Film & Dizi | Son eklenen ve popüler filmler, hızlı m3u8 akışı ve dahili VTT altyazı desteği. |
 | **Dizipal** | Film & Dizi | Next.js/PBKDF2 şifre çözücü motoru, tam sezon/bölüm listesi, 1080p doğrudan HLS akışı. |
 | **Dizibox** | Yabancı Dizi | Güncel yabancı diziler, MolyStream/Sheila 1080p doğrudan HLS akış çözücü. |
+| **DiziKorea** | Asya & Kore Dizileri | Kore, Çin, Japon ve Tayland dizileri, PlayerDKorea, VidMoly ve Filemoon çoklu kaynak desteği. |
 
 ---
 
