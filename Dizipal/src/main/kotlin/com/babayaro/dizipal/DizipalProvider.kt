@@ -261,36 +261,18 @@ class DizipalProvider : MainAPI() {
         return String(decrypted, Charsets.UTF_8)
     }
 
-    private suspend fun addSubtitle(
+    private fun addSubtitle(
         label: String,
         subUrl: String,
         headers: Map<String, String>,
         callback: (SubtitleFile) -> Unit
     ) {
         val cleanUrl = subUrl.replace("\\/", "/")
-        // 1. Altyazı içeriğini indirip yerel .vtt dosyası olarak sunmayı dene
-        // Bu sayede ExoPlayer 403 Forbidden hatası almaz ve .vtt uzantısıyla WebVTT olarak tanınır
         try {
-            val vttText = app.get(cleanUrl, headers = headers).text
-            if (vttText.contains("WEBVTT") || vttText.contains("-->")) {
-                val tempFile = java.io.File.createTempFile("dizipal_sub_", ".vtt")
-                tempFile.deleteOnExit()
-                tempFile.writeText(vttText, Charsets.UTF_8)
-                val subFile = SubtitleFile(
-                    lang = label,
-                    url = tempFile.toURI().toString()
-                )
-                subFile.headers = headers
-                callback.invoke(subFile)
-                return
-            }
-        } catch (e: Exception) {
-            // ignore
-        }
-
-        // 2. Yedek: Doğrudan URL ver (#.vtt uzantısı ile WebVTT algılanmasını sağla)
-        try {
-            val finalUrl = if (cleanUrl.contains(".vtt")) cleanUrl else "$cleanUrl#.vtt"
+            // URL'nin sonuna #.vtt ekleyerek Cloudstream'in bunu WebVTT (text/vtt) olarak algılamasını sağlıyoruz.
+            // OkHttpDataSource HTTP isteği yaparken fragment'ı (#.vtt) sunucuya iletmez, böylece nsub.php sorunsuz yanıt verir.
+            // Ayrıca headers (Referer + Origin + User-Agent) iletildiği için 403 Forbidden engeli aşılır.
+            val finalUrl = if (cleanUrl.endsWith("vtt")) cleanUrl else "$cleanUrl#.vtt"
             val subFile = SubtitleFile(
                 lang = label,
                 url = finalUrl
