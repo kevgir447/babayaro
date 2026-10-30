@@ -20,7 +20,7 @@ class DiziboxProvider : MainAPI() {
     override val mainPage = mainPageOf(
         "$mainUrl/tum-bolumler/?tip=populer" to "Popüler Bölümler",
         "$mainUrl/tum-bolumler/" to "Son Eklenen Bölümler",
-        "$mainUrl/arsiv/" to "Dizi Arşivi"
+        "$mainUrl/dizi-arsivi/" to "Dizi Arşivi"
     )
 
     private val defaultHeaders = mapOf(
@@ -33,54 +33,70 @@ class DiziboxProvider : MainAPI() {
         val link = if (this.tagName() == "a") this else (this.selectFirst("a.episode-card-title, a.poster-title, h3 a, h2 a, a.figure-link, a") ?: return null)
         val href = fixUrlNull(link.attr("href")) ?: return null
 
-        // Menü ve gereksiz sayfaları atla
-        if (href.contains("/arsiv/") || href.contains("/dizi-takvimi/") || href.contains("/yardim/") ||
+        // Menü ve sayfalama linklerini atla
+        if (href.contains("/dizi-takvimi/") || href.contains("/yardim/") ||
             href.contains("/iletisim/") || href.contains("/wp-login") || href.contains("/author/") ||
-            href == "$mainUrl/" || href.contains("/tum-bolumler/")) {
+            href == "$mainUrl/" || href.contains("/tum-bolumler/") || href.contains("/dizi-arsivi/") ||
+            href.contains("/arsiv/")) {
             return null
         }
 
-        val title = this.selectFirst(".series-name")?.text()?.ifEmpty { null }
+        val title = this.selectFirst(".episode-card-title")?.attr("title")?.ifEmpty { null }
             ?: link.attr("title").ifEmpty { null }
-            ?: this.selectFirst("h3, h2, h4, .poster-title, .title")?.text()?.ifEmpty { null }
-            ?: this.selectFirst(".main-cover, .afis, img.wp-post-image")?.attr("alt")?.ifEmpty { null }
+            ?: this.selectFirst(".poster-title, h3, h2, h4, .series-name, .title")?.text()?.ifEmpty { null }
+            ?: this.selectFirst("img.afis, img.main-cover, img.wp-post-image, img")?.attr("alt")?.ifEmpty { null }
             ?: return null
 
-        val posterUrl = this.selectFirst(".main-cover, .afis, img.wp-post-image, figure img, img[data-src], img")?.let { img ->
+        val posterUrl = this.select("img").mapNotNull { img ->
             val src = img.attr("data-src").ifEmpty { img.attr("data-original") }.ifEmpty { img.attr("src") }
-            if (src.startsWith("data:") || src.contains("altyazi") || src.contains("dublaj") || src.endsWith(".svg")) null else fixUrlNull(src)
-        }
+            if (src.isBlank() || src.startsWith("data:") || src.contains("altyazi") || src.contains("dublaj") || src.contains("flag") || src.endsWith(".svg")) {
+                null
+            } else {
+                fixUrlNull(src)
+            }
+        }.firstOrNull()
 
-        return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+        return newTvSeriesSearchResponse(title.trim(), href, TvType.TvSeries) {
             this.posterUrl = posterUrl
         }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if (page <= 1) {
-            request.data
-        } else {
-            if (request.data.contains("?")) {
-                val parts = request.data.split("?")
-                "${parts[0]}page/$page/?${parts[1]}"
+        return try {
+            val url = if (page <= 1) {
+                request.data
             } else {
-                "${request.data}page/$page/"
+                if (request.data.contains("?")) {
+                    val parts = request.data.split("?")
+                    "${parts[0]}page/$page/?${parts[1]}"
+                } else {
+                    "${request.data}page/$page/"
+                }
             }
+            val document = app.get(url, headers = defaultHeaders).document
+
+            val items = document.select("article, .article-series-poster, .article-episode-card, .detailed-article, .post, .dizibox-list li, .archive-item").mapNotNull {
+                it.toSearchResponse()
+            }.distinctBy { it.url }
+
+            newHomePageResponse(
+                list = HomePageList(
+                    name = request.name,
+                    list = items,
+                    isHorizontalImages = false
+                ),
+                hasNext = items.isNotEmpty()
+            )
+        } catch (e: Exception) {
+            newHomePageResponse(
+                list = HomePageList(
+                    name = request.name,
+                    list = emptyList(),
+                    isHorizontalImages = false
+                ),
+                hasNext = false
+            )
         }
-        val document = app.get(url, headers = defaultHeaders).document
-
-        val items = document.select("article, .article-series-poster, .article-episode-card, .detailed-article, .post, .dizibox-list li, .archive-item").mapNotNull {
-            it.toSearchResponse()
-        }.distinctBy { it.url }
-
-        return newHomePageResponse(
-            list = HomePageList(
-                name = request.name,
-                list = items,
-                isHorizontalImages = false
-            ),
-            hasNext = items.isNotEmpty()
-        )
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
