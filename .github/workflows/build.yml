@@ -58,8 +58,8 @@ jobs:
           ./gradlew make makePluginsJson
           cp **/build/*.cs3 $GITHUB_WORKSPACE/builds/ || true
           
-          # fileHash kaldır ve jsdelivr CDN URL'lerine dönüştür (Türkiye erişim engeli ve hash uyuşmazlığını önlemek için)
-          jq 'map(del(.fileHash))' build/plugins.json | sed "s|https://raw.githubusercontent.com/$GITHUB_REPOSITORY/builds/|https://cdn.jsdelivr.net/gh/$GITHUB_REPOSITORY@builds/|g" > $GITHUB_WORKSPACE/builds/plugins.json
+          # fileHash kaldır (hash uyuşmazlığını önlemek için). Doğrudan raw.githubusercontent kullanarak CDN önbellek gecikmesini önle
+          jq 'map(del(.fileHash))' build/plugins.json > $GITHUB_WORKSPACE/builds/plugins.json
 
           # repo.json dosyasını da oluştur (anında güncelleme için raw.githubusercontent kullan)
           cat <<EOF > $GITHUB_WORKSPACE/builds/repo.json
