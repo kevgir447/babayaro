@@ -15,7 +15,7 @@
     "version": 5,
     "internalName": "Dizibox",
     "description": "Dizibox - Yabancı Dizi izleme eklentisi",
-    "url": "https://cdn.jsdelivr.net/gh/kevgir447/babayaro@builds/Dizibox.cs3",
+    "url": "https://raw.githubusercontent.com/kevgir447/babayaro/builds/Dizibox.cs3",
     "name": "Dizibox"
   },
   {
@@ -35,7 +35,7 @@
     "version": 3,
     "internalName": "Dizikorea",
     "description": "Dizikorea - Asya ve Kore Dizileri izleme eklentisi",
-    "url": "https://cdn.jsdelivr.net/gh/kevgir447/babayaro@builds/Dizikorea.cs3",
+    "url": "https://raw.githubusercontent.com/kevgir447/babayaro/builds/Dizikorea.cs3",
     "name": "Dizikorea"
   },
   {
@@ -55,7 +55,7 @@
     "version": 3,
     "internalName": "Dizipal",
     "description": "Dizipal - Film ve Yabancı Dizi izleme eklentisi",
-    "url": "https://cdn.jsdelivr.net/gh/kevgir447/babayaro@builds/Dizipal.cs3",
+    "url": "https://raw.githubusercontent.com/kevgir447/babayaro/builds/Dizipal.cs3",
     "name": "Dizipal"
   },
   {
@@ -75,7 +75,7 @@
     "version": 9,
     "internalName": "Hdfilmcehennemi",
     "description": "HDFilmCehennemi - Film ve Dizi izleme eklentisi",
-    "url": "https://cdn.jsdelivr.net/gh/kevgir447/babayaro@builds/Hdfilmcehennemi.cs3",
+    "url": "https://raw.githubusercontent.com/kevgir447/babayaro/builds/Hdfilmcehennemi.cs3",
     "name": "Hdfilmcehennemi"
   }
 ]
