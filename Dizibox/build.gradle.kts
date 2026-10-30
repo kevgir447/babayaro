@@ -7,4 +7,4 @@ cloudstream {
     iconUrl = "https://www.dizibox.live/wp-content/themes/dizibox/images/logo.png"
 }
 
-version = 5
+version = 6

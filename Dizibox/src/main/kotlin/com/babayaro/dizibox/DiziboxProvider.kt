@@ -49,15 +49,17 @@ class DiziboxProvider : MainAPI() {
 
         val posterUrl = this.select("img").mapNotNull { img ->
             val src = img.attr("data-src").ifEmpty { img.attr("data-original") }.ifEmpty { img.attr("src") }
-            if (src.isBlank() || src.startsWith("data:") || src.contains("altyazi") || src.contains("dublaj") || src.contains("flag") || src.endsWith(".svg")) {
+            if (src.isBlank() || src.startsWith("data:") || src.contains("altyazi") || src.contains("dublaj") ||
+                src.contains("flag") || src.contains("orjdil") || src.contains("dil") || src.endsWith(".svg")) {
                 null
             } else {
-                fixUrlNull(src)
+                fixUrlNull(src)?.replace("-220x140", "-200x290")
             }
         }.firstOrNull()
 
         return newTvSeriesSearchResponse(title.trim(), href, TvType.TvSeries) {
             this.posterUrl = posterUrl
+            this.posterHeaders = defaultHeaders
         }
     }
 
@@ -115,9 +117,17 @@ class DiziboxProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url, headers = defaultHeaders).document
 
-        // Eğer bölüm linkine tıklandıysa (örn: mobland-2-sezon-7-bolum-izle), dizinin tüm bölümlerini almak için ana dizi sayfasını bul
+        // Eğer bölüm linkine tıklandıysa (örn: mobland-2-sezon-7-bolum-izle), doğru dizi sayfasını bul
         val seriesHref = if (url.contains("-sezon-") && url.contains("-bolum-")) {
-            document.selectFirst("a[title*='izle'][href*='/diziler/'], a.figure[href*='/diziler/'], a[href*='/diziler/']")?.attr("href")?.let { fixUrlNull(it) }
+            // Navbar'ı hariç tut; archive-title veya breadcrumb içindeki gerçek dizi sayfasını al
+            document.selectFirst("a.archive-title, .archive-title")?.attr("href")?.let { fixUrlNull(it) }
+                ?: Regex("""itemListElement":\[\{[^}]+\},\{[^}]*"item":"(https?:\\/\\/[^"]+\\/dizi\\/[^"]+\\/)""").find(document.html())?.groupValues?.get(1)?.replace("\\/", "/")?.let { fixUrlNull(it) }
+                ?: run {
+                    val slugPart = url.substringBefore("-izle").substringBefore("-hd").substringBeforeLast("/").substringAfterLast("/")
+                    val m = Regex("""^(.*?)-\d+-sezon""").find(slugPart)
+                    val sSlug = m?.groupValues?.get(1)
+                    if (sSlug != null) fixUrlNull("$mainUrl/diziler/$sSlug/") else null
+                }
         } else null
 
         val targetDoc = if (seriesHref != null) {
@@ -132,16 +142,22 @@ class DiziboxProvider : MainAPI() {
 
         val targetUrl = seriesHref ?: url
 
+        // Menü ve üst kısımları temizle ki yanlış başlık veya afiş çekilmesin
+        targetDoc.select("header, footer, nav, .menu, .navbar, .alphabetical-category-list, aside, .sidebar").remove()
+        document.select("header, footer, nav, .menu, .navbar, .alphabetical-category-list, aside, .sidebar").remove()
+
         val title = targetDoc.selectFirst("h1.title, h1.entry-title, h1, .m-b-0 a")?.text()
             ?: document.selectFirst("h1.title, h1.entry-title, h1, .m-b-0 a")?.text()
             ?: targetDoc.selectFirst("meta[property=og:title]")?.attr("content")?.replace(" izle", "")?.trim()
             ?: document.selectFirst("meta[property=og:title]")?.attr("content")?.replace(" izle", "")?.trim()
             ?: ""
 
-        val posterUrl = targetDoc.selectFirst("meta[property=og:image]")?.attr("content")
+        val rawPoster = targetDoc.selectFirst("meta[property=og:image]")?.attr("content")
             ?: targetDoc.selectFirst(".main-cover, .poster img, .entry-thumbnail img, figure img")?.attr("src")
             ?: document.selectFirst("meta[property=og:image]")?.attr("content")
             ?: document.selectFirst(".main-cover, .poster img, .entry-thumbnail img, figure img")?.attr("src")
+
+        val posterUrl = fixUrlNull(rawPoster)?.replace("-220x140", "-200x290")
 
         val plot = targetDoc.selectFirst(".post-summary, .overview, .entry-content p, .story")?.text()
             ?: document.selectFirst(".post-summary, .overview, .entry-content p, .story")?.text()
@@ -213,6 +229,7 @@ class DiziboxProvider : MainAPI() {
 
         return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes.distinctBy { it.data }) {
             this.posterUrl = posterUrl
+            this.posterHeaders = defaultHeaders
             this.plot = plot
             this.year = year
             this.tags = tags
