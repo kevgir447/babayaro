@@ -261,6 +261,47 @@ class DizipalProvider : MainAPI() {
         return String(decrypted, Charsets.UTF_8)
     }
 
+    private suspend fun addSubtitle(
+        label: String,
+        subUrl: String,
+        headers: Map<String, String>,
+        callback: (SubtitleFile) -> Unit
+    ) {
+        val cleanUrl = subUrl.replace("\\/", "/")
+        // 1. Altyazı içeriğini indirip yerel .vtt dosyası olarak sunmayı dene
+        // Bu sayede ExoPlayer 403 Forbidden hatası almaz ve .vtt uzantısıyla WebVTT olarak tanınır
+        try {
+            val vttText = app.get(cleanUrl, headers = headers).text
+            if (vttText.contains("WEBVTT") || vttText.contains("-->")) {
+                val tempFile = java.io.File.createTempFile("dizipal_sub_", ".vtt")
+                tempFile.deleteOnExit()
+                tempFile.writeText(vttText, Charsets.UTF_8)
+                val subFile = SubtitleFile(
+                    lang = label,
+                    url = tempFile.toURI().toString()
+                )
+                subFile.headers = headers
+                callback.invoke(subFile)
+                return
+            }
+        } catch (e: Exception) {
+            // ignore
+        }
+
+        // 2. Yedek: Doğrudan URL ver (#.vtt uzantısı ile WebVTT algılanmasını sağla)
+        try {
+            val finalUrl = if (cleanUrl.contains(".vtt")) cleanUrl else "$cleanUrl#.vtt"
+            val subFile = SubtitleFile(
+                lang = label,
+                url = finalUrl
+            )
+            subFile.headers = headers
+            callback.invoke(subFile)
+        } catch (e: Exception) {
+            // ignore
+        }
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -342,14 +383,10 @@ class DizipalProvider : MainAPI() {
                         }
 
                         config.subtitles?.forEach { sub ->
-                            val subUrl = sub.url?.replace("\\/", "/")
+                            val subUrl = sub.url
                             if (!subUrl.isNullOrEmpty()) {
-                                subtitleCallback.invoke(
-                                    SubtitleFile(
-                                        lang = sub.label ?: sub.lang ?: "Türkçe",
-                                        url = subUrl
-                                    )
-                                )
+                                val label = sub.label ?: sub.lang ?: "Türkçe"
+                                addSubtitle(label, subUrl, dplayerHeaders, subtitleCallback)
                             }
                         }
                     } catch (e: Exception) {
@@ -399,16 +436,13 @@ class DizipalProvider : MainAPI() {
                 }
 
                 // 4. Altyazıları regex ile de tara (fallback)
-                val subRegex = Regex(""""label"\s*:\s*"([^"]+)"[^}]*"url"\s*:\s*"([^"]+)"""")
-                subRegex.findAll(playerHtml).forEach { sm ->
-                    val label = sm.groupValues[1]
-                    val subUrl = sm.groupValues[2].replace("\\/", "/")
-                    subtitleCallback.invoke(
-                        SubtitleFile(
-                            lang = label,
-                            url = subUrl
-                        )
-                    )
+                if (npConfigMatch == null) {
+                    val subRegex = Regex(""""label"\s*:\s*"([^"]+)"[^}]*"url"\s*:\s*"([^"]+)"""")
+                    subRegex.findAll(playerHtml).forEach { sm ->
+                        val label = sm.groupValues[1]
+                        val subUrl = sm.groupValues[2]
+                        addSubtitle(label, subUrl, dplayerHeaders, subtitleCallback)
+                    }
                 }
             } catch (e: Exception) {
                 // ignore
