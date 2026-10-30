@@ -5,12 +5,31 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Element
 import java.nio.ByteBuffer
 import javax.crypto.Cipher
 import javax.crypto.Mac
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
+
+data class NpSource(
+    @JsonProperty("title") val title: String? = null,
+    @JsonProperty("kind") val kind: String? = null,
+    @JsonProperty("master") val master: String? = null
+)
+
+data class NpSubtitle(
+    @JsonProperty("label") val label: String? = null,
+    @JsonProperty("lang") val lang: String? = null,
+    @JsonProperty("url") val url: String? = null
+)
+
+data class NpConfig(
+    @JsonProperty("sources") val sources: List<NpSource>? = null,
+    @JsonProperty("subtitles") val subtitles: List<NpSubtitle>? = null
+)
 
 class DizipalProvider : MainAPI() {
     override var mainUrl = "https://dizipal1592.com"
@@ -117,22 +136,6 @@ class DizipalProvider : MainAPI() {
         @JsonProperty("containsSeason") val containsSeason: List<SeasonSchema>? = null
     )
 
-    private data class NpSource(
-        @JsonProperty("title") val title: String? = null,
-        @JsonProperty("kind") val kind: String? = null,
-        @JsonProperty("master") val master: String? = null
-    )
-
-    private data class NpSubtitle(
-        @JsonProperty("label") val label: String? = null,
-        @JsonProperty("lang") val lang: String? = null,
-        @JsonProperty("url") val url: String? = null
-    )
-
-    private data class NpConfig(
-        @JsonProperty("sources") val sources: List<NpSource>? = null,
-        @JsonProperty("subtitles") val subtitles: List<NpSubtitle>? = null
-    )
 
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
@@ -324,15 +327,16 @@ class DizipalProvider : MainAPI() {
                                 foundMaster = true
                                 val title = src.title?.ifEmpty { null } ?: "Orijinal"
                                 callback.invoke(
-                                    ExtractorLink(
+                                    newExtractorLink(
                                         source = this.name,
                                         name = "${this.name} - $title",
                                         url = masterUrl,
-                                        referer = playerUrl,
-                                        quality = Qualities.Unknown.value,
-                                        isM3u8 = true,
-                                        headers = dplayerHeaders
-                                    )
+                                        type = ExtractorLinkType.M3U8
+                                    ) {
+                                        this.referer = playerUrl
+                                        this.quality = Qualities.Unknown.value
+                                        this.headers = dplayerHeaders
+                                    }
                                 )
                             }
                         }
@@ -360,15 +364,16 @@ class DizipalProvider : MainAPI() {
                         val masterUrl = match.groupValues[1].replace("\\/", "/")
                         foundMaster = true
                         callback.invoke(
-                            ExtractorLink(
+                            newExtractorLink(
                                 source = this.name,
                                 name = "${this.name} - Orijinal",
                                 url = masterUrl,
-                                referer = playerUrl,
-                                quality = Qualities.Unknown.value,
-                                isM3u8 = true,
-                                headers = dplayerHeaders
-                            )
+                                type = ExtractorLinkType.M3U8
+                            ) {
+                                this.referer = playerUrl
+                                this.quality = Qualities.Unknown.value
+                                this.headers = dplayerHeaders
+                            }
                         )
                     }
                 }
@@ -379,15 +384,16 @@ class DizipalProvider : MainAPI() {
                     m3u8Regex.findAll(playerHtml).forEach { match ->
                         val streamUrl = match.groupValues[1].replace("\\/", "/")
                         callback.invoke(
-                            ExtractorLink(
+                            newExtractorLink(
                                 source = this.name,
                                 name = this.name,
                                 url = streamUrl,
-                                referer = playerUrl,
-                                quality = Qualities.Unknown.value,
-                                isM3u8 = true,
-                                headers = dplayerHeaders
-                            )
+                                type = ExtractorLinkType.M3U8
+                            ) {
+                                this.referer = playerUrl
+                                this.quality = Qualities.Unknown.value
+                                this.headers = dplayerHeaders
+                            }
                         )
                     }
                 }
