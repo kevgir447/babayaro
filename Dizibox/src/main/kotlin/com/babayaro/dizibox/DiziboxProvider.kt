@@ -23,18 +23,32 @@ class DiziboxProvider : MainAPI() {
         "$mainUrl/arsiv/" to "Dizi Arşivi"
     )
 
+    private val defaultHeaders = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept-Language" to "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer" to "https://www.dizibox.live/"
+    )
+
     private fun Element.toSearchResponse(): SearchResponse? {
-        val link = if (this.tagName() == "a") this else (this.selectFirst("a.poster-title, a.episode-card-title, a") ?: return null)
+        val link = if (this.tagName() == "a") this else (this.selectFirst("a.episode-card-title, a.poster-title, h3 a, h2 a, a.figure-link, a") ?: return null)
         val href = fixUrlNull(link.attr("href")) ?: return null
 
-        val title = link.attr("title").ifEmpty { null }
-            ?: this.selectFirst(".series-name, .poster-title, h2, h3, h4, .title")?.text()
-            ?: this.selectFirst("img")?.attr("alt")?.ifEmpty { null }
+        // Menü ve gereksiz sayfaları atla
+        if (href.contains("/arsiv/") || href.contains("/dizi-takvimi/") || href.contains("/yardim/") ||
+            href.contains("/iletisim/") || href.contains("/wp-login") || href.contains("/author/") ||
+            href == "$mainUrl/" || href.contains("/tum-bolumler/")) {
+            return null
+        }
+
+        val title = this.selectFirst(".series-name")?.text()?.ifEmpty { null }
+            ?: link.attr("title").ifEmpty { null }
+            ?: this.selectFirst("h3, h2, h4, .poster-title, .title")?.text()?.ifEmpty { null }
+            ?: this.selectFirst(".main-cover, .afis, img.wp-post-image")?.attr("alt")?.ifEmpty { null }
             ?: return null
 
-        val posterUrl = this.selectFirst("img")?.let { img ->
+        val posterUrl = this.selectFirst(".main-cover, .afis, img.wp-post-image, figure img, img[data-src], img")?.let { img ->
             val src = img.attr("data-src").ifEmpty { img.attr("data-original") }.ifEmpty { img.attr("src") }
-            if (src.startsWith("data:")) null else fixUrlNull(src)
+            if (src.startsWith("data:") || src.contains("altyazi") || src.contains("dublaj") || src.endsWith(".svg")) null else fixUrlNull(src)
         }
 
         return newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
@@ -53,9 +67,9 @@ class DiziboxProvider : MainAPI() {
                 "${request.data}page/$page/"
             }
         }
-        val document = app.get(url).document
+        val document = app.get(url, headers = defaultHeaders).document
 
-        val items = document.select("article, .article-series-poster, .article-episode-card, .post, .dizibox-list li, .archive-item").mapNotNull {
+        val items = document.select("article, .article-series-poster, .article-episode-card, .detailed-article, .post, .dizibox-list li, .archive-item").mapNotNull {
             it.toSearchResponse()
         }.distinctBy { it.url }
 
@@ -70,56 +84,118 @@ class DiziboxProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val searchUrl = "$mainUrl/?s=${query.trim()}"
-        val document = app.get(searchUrl).document
+        return try {
+            val searchUrl = "$mainUrl/search/${query.trim().replace(" ", "+")}/"
+            val document = app.get(searchUrl, headers = defaultHeaders).document
 
-        return document.select("article, .post, .entry, .search-result").mapNotNull {
-            it.toSearchResponse()
-        }.distinctBy { it.url }
+            document.select("article, .article-series-poster, .article-episode-card, .detailed-article, .post, .entry, .search-result").mapNotNull {
+                it.toSearchResponse()
+            }.distinctBy { it.url }
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val document = app.get(url).document
-        val title = document.selectFirst("h1.title, h1.entry-title, h1")?.text()
+        val document = app.get(url, headers = defaultHeaders).document
+
+        // Eğer bölüm linkine tıklandıysa (örn: mobland-2-sezon-7-bolum-izle), dizinin tüm bölümlerini almak için ana dizi sayfasını bul
+        val seriesHref = if (url.contains("-sezon-") && url.contains("-bolum-")) {
+            document.selectFirst("a[title*='izle'][href*='/diziler/'], a.figure[href*='/diziler/'], a[href*='/diziler/']")?.attr("href")?.let { fixUrlNull(it) }
+        } else null
+
+        val targetDoc = if (seriesHref != null) {
+            try {
+                app.get(seriesHref, headers = defaultHeaders).document
+            } catch (e: Exception) {
+                document
+            }
+        } else {
+            document
+        }
+
+        val targetUrl = seriesHref ?: url
+
+        val title = targetDoc.selectFirst("h1.title, h1.entry-title, h1, .m-b-0 a")?.text()
+            ?: document.selectFirst("h1.title, h1.entry-title, h1, .m-b-0 a")?.text()
+            ?: targetDoc.selectFirst("meta[property=og:title]")?.attr("content")?.replace(" izle", "")?.trim()
             ?: document.selectFirst("meta[property=og:title]")?.attr("content")?.replace(" izle", "")?.trim()
             ?: ""
 
-        val posterUrl = document.selectFirst("meta[property=og:image]")?.attr("content")
-            ?: document.selectFirst(".poster img, .entry-thumbnail img")?.attr("src")
+        val posterUrl = targetDoc.selectFirst("meta[property=og:image]")?.attr("content")
+            ?: targetDoc.selectFirst(".main-cover, .poster img, .entry-thumbnail img, figure img")?.attr("src")
+            ?: document.selectFirst("meta[property=og:image]")?.attr("content")
+            ?: document.selectFirst(".main-cover, .poster img, .entry-thumbnail img, figure img")?.attr("src")
 
-        val plot = document.selectFirst(".overview, .entry-content p, .story")?.text()
-            ?: document.selectFirst("meta[property=og:description]")?.attr("content")
+        val plot = targetDoc.selectFirst(".post-summary, .overview, .entry-content p, .story")?.text()
+            ?: document.selectFirst(".post-summary, .overview, .entry-content p, .story")?.text()
+            ?: targetDoc.selectFirst("meta[property=og:description]")?.attr("content")
 
-        val year = Regex("""\b(19\d\d|20\d\d)\b""").find(document.select(".meta, .info").text())?.value?.toIntOrNull()
-        val tags = document.select(".genres a, .tags a").map { it.text() }
+        val year = Regex("""\b(19\d\d|20\d\d)\b""").find(targetDoc.select(".custom-field, .meta, .info").text())?.value?.toIntOrNull()
+        val tags = targetDoc.select(".genres a, .tags a, .custom-fields-container span").map { it.text() }.filter { it.isNotBlank() }
 
         val episodes = mutableListOf<Episode>()
 
-        // Dizibox bölüm listesini ayrıştır
-        document.select("a[href*='-sezon-'], a[href*='-bolum-'], .episodes-list a").forEach { epElem ->
-            val epHref = fixUrl(epElem.attr("href"))
-            val epText = epElem.text()
+        // Sezon listesini tara (#seasons-list)
+        val seasonLinks = targetDoc.select("#seasons-list a").mapNotNull { fixUrlNull(it.attr("href")) }.distinct()
+        val seasonDocs = mutableListOf<org.jsoup.nodes.Document>()
+        seasonDocs.add(targetDoc)
 
-            val sMatch = Regex("""(\d+)\.\s*[sS]ezon""").find(epText)
-                ?: Regex("""(\d+)-sezon""").find(epHref)
-            val seasonNum = sMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
-
-            val eMatch = Regex("""(\d+)\.\s*[bB][oö]l[uü]m""").find(epText)
-                ?: Regex("""(\d+)-bolum""").find(epHref)
-            val epNum = eMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
-
-            if (!episodes.any { it.data == epHref }) {
-                episodes.add(
-                    newEpisode(epHref) {
-                        this.name = epText.ifEmpty { "$seasonNum. Sezon $epNum. Bölüm" }
-                        this.season = seasonNum
-                        this.episode = epNum
-                    }
-                )
+        for (sLink in seasonLinks) {
+            if (sLink != targetUrl) {
+                try {
+                    seasonDocs.add(app.get(sLink, headers = defaultHeaders).document)
+                } catch (e: Exception) {
+                    // ignore
+                }
             }
         }
 
-        return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+        for (sDoc in seasonDocs) {
+            sDoc.select("a.season-episode, a[href*='-sezon-'][href*='-bolum-'], .episodes-list a").forEach { epElem ->
+                val epHref = fixUrlNull(epElem.attr("href")) ?: return@forEach
+                val epText = epElem.text()
+
+                val sMatch = Regex("""(\d+)\.\s*[sS]ezon""").find(epText)
+                    ?: Regex("""(\d+)-sezon""").find(epHref)
+                val seasonNum = sMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+
+                val eMatch = Regex("""(\d+)\.\s*[bB][oö]l[uü]m""").find(epText)
+                    ?: Regex("""(\d+)-bolum""").find(epHref)
+                val epNum = eMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+
+                if (!episodes.any { it.data == epHref }) {
+                    episodes.add(
+                        newEpisode(epHref) {
+                            this.name = epText.ifEmpty { "$seasonNum. Sezon $epNum. Bölüm" }
+                            this.season = seasonNum
+                            this.episode = epNum
+                        }
+                    )
+                }
+            }
+        }
+
+        // Eğer sezon listesinde bölüm bulunamadıysa mevcut sayfayı tek bölüm olarak ekle
+        if (episodes.isEmpty()) {
+            val sMatch = Regex("""(\d+)\.\s*[sS]ezon""").find(title)
+                ?: Regex("""(\d+)-sezon""").find(url)
+            val seasonNum = sMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+
+            val eMatch = Regex("""(\d+)\.\s*[bB][oö]l[uü]m""").find(title)
+                ?: Regex("""(\d+)-bolum""").find(url)
+            val epNum = eMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
+
+            episodes.add(
+                newEpisode(url) {
+                    this.name = "$seasonNum. Sezon $epNum. Bölüm"
+                    this.season = seasonNum
+                    this.episode = epNum
+                }
+            )
+        }
+
+        return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes.distinctBy { it.data }) {
             this.posterUrl = posterUrl
             this.plot = plot
             this.year = year
@@ -173,7 +249,7 @@ class DiziboxProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data).document
+        val document = app.get(data, headers = defaultHeaders).document
         val iframes = document.select("iframe").mapNotNull {
             val src = it.attr("src").ifEmpty { it.attr("data-src") }
             if (src.isNotEmpty()) fixUrl(src) else null
@@ -187,7 +263,7 @@ class DiziboxProvider : MainAPI() {
                         fixedIframe,
                         headers = mapOf(
                             "Referer" to "$mainUrl/",
-                            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                            "User-Agent" to defaultHeaders["User-Agent"]!!
                         )
                     ).text
                     val molyIframe = Regex("""<iframe[^>]+(?:src|data-src)=["']([^"']+)["']""").find(kingHtml)?.groupValues?.get(1)
@@ -207,7 +283,7 @@ class DiziboxProvider : MainAPI() {
                                     name = "$name - MolyStream",
                                     streamUrl = sheilaUrl,
                                     referer = fixedMoly,
-                                    headers = mapOf("Referer" to fixedMoly)
+                                    headers = mapOf("Referer" to fixedMoly, "User-Agent" to defaultHeaders["User-Agent"]!!)
                                 ).forEach(callback)
                             } catch (e: Exception) {
                                 // ignore
@@ -215,7 +291,14 @@ class DiziboxProvider : MainAPI() {
                         }
 
                         // 2. CryptoJS şifre çözücü ile kontrol
-                        val molyHtml = app.get(fixedMoly, headers = mapOf("Referer" to "$mainUrl/")).text
+                        val molyHtml = app.get(
+                            fixedMoly,
+                            headers = mapOf(
+                                "Referer" to "$mainUrl/",
+                                "User-Agent" to defaultHeaders["User-Agent"]!!
+                            )
+                        ).text
+
                         val m3u8Regex = Regex("""(https?://[^\s"'<>]+\.m3u8[^\s"'<>]*)""")
                         m3u8Regex.findAll(molyHtml).forEach { match ->
                             val streamUrl = match.groupValues[1].replace("\\/", "/")
@@ -224,11 +307,11 @@ class DiziboxProvider : MainAPI() {
                                 name = "$name - MolyStream",
                                 streamUrl = streamUrl,
                                 referer = fixedMoly,
-                                headers = mapOf("Referer" to fixedMoly)
+                                headers = mapOf("Referer" to fixedMoly, "User-Agent" to defaultHeaders["User-Agent"]!!)
                             ).forEach(callback)
                         }
 
-                        val cryptoMatch = Regex("""CryptoJS\.AES\.decrypt\(\"([^\"]+)\"\s*,\s*\"([^\"]+)\"\)""").find(molyHtml)
+                        val cryptoMatch = Regex("""CryptoJS\.AES\.decrypt\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\)""").find(molyHtml)
                         if (cryptoMatch != null) {
                             val ct = cryptoMatch.groupValues[1]
                             val pw = cryptoMatch.groupValues[2]
@@ -243,7 +326,7 @@ class DiziboxProvider : MainAPI() {
                                         name = this.name,
                                         streamUrl = streamUrl,
                                         referer = fixedMoly,
-                                        headers = mapOf("Referer" to fixedMoly)
+                                        headers = mapOf("Referer" to fixedMoly, "User-Agent" to defaultHeaders["User-Agent"]!!)
                                     ).forEach(callback)
                                 }
                             }
