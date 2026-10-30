@@ -42,7 +42,7 @@
     "iconUrl": "https://dizipal1592.com/assets/images/logo-dpal.svg",
     "apiVersion": 1,
     "repositoryUrl": "https://github.com/kevgir447/babayaro",
-    "fileSize": 32969,
+    "fileSize": 30923,
     "status": 1,
     "language": "tr",
     "authors": [
@@ -52,7 +52,7 @@
       "Movie",
       "TvSeries"
     ],
-    "version": 5,
+    "version": 6,
     "internalName": "Dizipal",
     "description": "Dizipal - Film ve Yabancı Dizi izleme eklentisi",
     "url": "https://cdn.jsdelivr.net/gh/kevgir447/babayaro@builds/Dizipal.cs3",
