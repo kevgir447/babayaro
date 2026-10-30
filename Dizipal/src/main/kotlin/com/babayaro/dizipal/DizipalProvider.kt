@@ -117,6 +117,23 @@ class DizipalProvider : MainAPI() {
         @JsonProperty("containsSeason") val containsSeason: List<SeasonSchema>? = null
     )
 
+    private data class NpSource(
+        @JsonProperty("title") val title: String? = null,
+        @JsonProperty("kind") val kind: String? = null,
+        @JsonProperty("master") val master: String? = null
+    )
+
+    private data class NpSubtitle(
+        @JsonProperty("label") val label: String? = null,
+        @JsonProperty("lang") val lang: String? = null,
+        @JsonProperty("url") val url: String? = null
+    )
+
+    private data class NpConfig(
+        @JsonProperty("sources") val sources: List<NpSource>? = null,
+        @JsonProperty("subtitles") val subtitles: List<NpSubtitle>? = null
+    )
+
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
         val title = document.selectFirst("h1")?.text()
@@ -278,38 +295,104 @@ class DizipalProvider : MainAPI() {
                     )
                 ).text
 
-                // Master m3u8 veya m3u8 linklerini ayıkla
-                val m3u8Regex = Regex("""(https?://[^\s"'<>]+\.m3u8[^\s"'<>]*)""")
-                m3u8Regex.findAll(playerHtml).forEach { match ->
-                    val streamUrl = match.groupValues[1].replace("\\/", "/")
-                    M3u8Helper.generateM3u8(
-                        source = this.name,
-                        name = this.name,
-                        streamUrl = streamUrl,
-                        referer = playerUrl,
-                        headers = mapOf(
-                            "Referer" to playerUrl,
-                            "Origin" to "https://four.dplayer82.site"
-                        )
-                    ).forEach(callback)
+                val origin = try {
+                    val uri = java.net.URI(playerUrl)
+                    "${uri.scheme}://${uri.host}"
+                } catch (e: Exception) {
+                    "https://four.dplayer82.site"
                 }
 
-                val masterMatch = Regex(""""master"\s*:\s*"([^"]+)"""").find(playerHtml)?.groupValues?.get(1)
-                if (masterMatch != null) {
-                    val masterUrl = masterMatch.replace("\\/", "/")
-                    M3u8Helper.generateM3u8(
-                        source = this.name,
-                        name = this.name,
-                        streamUrl = masterUrl,
-                        referer = playerUrl,
-                        headers = mapOf(
-                            "Referer" to playerUrl,
-                            "Origin" to "https://four.dplayer82.site"
-                        )
-                    ).forEach(callback)
+                val dplayerHeaders = mapOf(
+                    "Referer" to playerUrl,
+                    "Origin" to origin,
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
+
+                var foundMaster = false
+
+                // 1. window.NP_CONFIG üzerinden kaynakları ve altyazıları çek
+                // ExoPlayer'a master m3u8 playlistini doğrudan veriyoruz.
+                // M3u8Helper parçalama yaparsa ayrık ses (dual audio / demuxed HLS) kaybolur ve ses gelmez.
+                // Master playlist doğrudan verildiğinde ExoPlayer hem görüntüyü hem sesi eksiksiz senkronize eder.
+                val npConfigMatch = Regex("""window\.NP_CONFIG\s*=\s*(\{.*?\});""", RegexOption.DOT_MATCHES_ALL).find(playerHtml)?.groupValues?.get(1)
+                if (npConfigMatch != null) {
+                    try {
+                        val config = AppUtils.parseJson<NpConfig>(npConfigMatch)
+                        config.sources?.forEach { src ->
+                            val masterUrl = src.master?.replace("\\/", "/")
+                            if (!masterUrl.isNullOrEmpty()) {
+                                foundMaster = true
+                                val title = src.title?.ifEmpty { null } ?: "Orijinal"
+                                callback.invoke(
+                                    ExtractorLink(
+                                        source = this.name,
+                                        name = "${this.name} - $title",
+                                        url = masterUrl,
+                                        referer = playerUrl,
+                                        quality = Qualities.Unknown.value,
+                                        isM3u8 = true,
+                                        headers = dplayerHeaders
+                                    )
+                                )
+                            }
+                        }
+
+                        config.subtitles?.forEach { sub ->
+                            val subUrl = sub.url?.replace("\\/", "/")
+                            if (!subUrl.isNullOrEmpty()) {
+                                subtitleCallback.invoke(
+                                    SubtitleFile(
+                                        lang = sub.label ?: sub.lang ?: "Türkçe",
+                                        url = subUrl
+                                    )
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        // ignore
+                    }
                 }
 
-                // Altyazıları ayıkla
+                // 2. Regex fallback: master m3u8 linklerini doğrudan çek
+                if (!foundMaster) {
+                    val masterRegex = Regex(""""master"\s*:\s*"([^"]+)"""")
+                    masterRegex.findAll(playerHtml).forEach { match ->
+                        val masterUrl = match.groupValues[1].replace("\\/", "/")
+                        foundMaster = true
+                        callback.invoke(
+                            ExtractorLink(
+                                source = this.name,
+                                name = "${this.name} - Orijinal",
+                                url = masterUrl,
+                                referer = playerUrl,
+                                quality = Qualities.Unknown.value,
+                                isM3u8 = true,
+                                headers = dplayerHeaders
+                            )
+                        )
+                    }
+                }
+
+                // 3. m3u8 direkt link fallback (eğer master bulunamazsa)
+                if (!foundMaster) {
+                    val m3u8Regex = Regex("""(https?://[^\s"'<>]+\.m3u8[^\s"'<>]*)""")
+                    m3u8Regex.findAll(playerHtml).forEach { match ->
+                        val streamUrl = match.groupValues[1].replace("\\/", "/")
+                        callback.invoke(
+                            ExtractorLink(
+                                source = this.name,
+                                name = this.name,
+                                url = streamUrl,
+                                referer = playerUrl,
+                                quality = Qualities.Unknown.value,
+                                isM3u8 = true,
+                                headers = dplayerHeaders
+                            )
+                        )
+                    }
+                }
+
+                // 4. Altyazıları regex ile de tara (fallback)
                 val subRegex = Regex(""""label"\s*:\s*"([^"]+)"[^}]*"url"\s*:\s*"([^"]+)"""")
                 subRegex.findAll(playerHtml).forEach { sm ->
                     val label = sm.groupValues[1]

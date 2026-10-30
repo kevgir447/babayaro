@@ -7,4 +7,4 @@ cloudstream {
     iconUrl = "https://dizipal1592.com/assets/images/logo-dpal.svg"
 }
 
-version = 3
+version = 4
